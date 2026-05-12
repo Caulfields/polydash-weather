@@ -1,5 +1,8 @@
 {
-  "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  "routes": [
+    { "src": "/api/metar", "dest": "/api/metar.js" },
+    { "src": "/api/forecast", "dest": "/api/forecast.js" },
+    { "handle": "filesystem" },
+    { "src": "/.*", "dest": "/index.html" }
   ]
 }
