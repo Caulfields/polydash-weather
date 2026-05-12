@@ -400,6 +400,17 @@ canvas#tempChartOverlay {
   background: rgba(34, 197, 94, 0.18);
 }
 
+.rank-button.combo {
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(96, 165, 250, 0.12);
+  color: #bfdbfe;
+}
+
+.rank-button.combo:hover:not(:disabled) {
+  border-color: rgba(96, 165, 250, 0.85);
+  background: rgba(96, 165, 250, 0.18);
+}
+
 .rank-button:disabled {
   cursor: wait;
   opacity: 0.65;

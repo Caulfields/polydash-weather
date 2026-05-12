@@ -68,7 +68,10 @@ function setOmHeader() {
   const bestBtn = document.getElementById('omModeBest');
   const avgBtn = document.getElementById('omModeAvg');
   if (!badge) return;
-  badge.textContent = activeForecastModel === 'auto'
+  const averaged = averagedModelsById?.[activeForecastModel];
+  badge.textContent = averaged
+    ? averaged.label
+    : activeForecastModel === 'auto'
     ? (activeCity.omBadge || 'OM')
     : (WEATHER_MODELS[activeForecastModel] || activeForecastModel);
   if (switchWrap) switchWrap.style.display = 'none';
@@ -94,10 +97,22 @@ function windDir(degValue) {
 async function fetchOpenMeteo() {
   const requestCityId = activeCity.id;
   const requestModel = activeForecastModel;
+  const averaged = averagedModelsById?.[requestModel];
   try {
     setOmHeader();
     document.getElementById('omLoading').style.display = '';
     document.getElementById('omLoading').textContent = 'Loading...';
+    if (averaged) {
+      hourlyOmState = {
+        dateKey: cityTodayKey(activeCity.timezone),
+        rows: averaged.rows,
+        sourceLabel: averaged.label,
+      };
+      omData = null;
+      document.getElementById('omLoading').style.display = 'none';
+      drawChart();
+      return;
+    }
     const res = await fetch(buildOpenMeteoUrl(), { cache: 'no-store' });
     if (!res.ok) throw new Error(res.status);
     const data = await res.json();
