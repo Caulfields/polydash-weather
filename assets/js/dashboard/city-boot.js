@@ -5,6 +5,13 @@ let averagedModelsById = {};
 let rankedCityId = null;
 let rankingRunId = 0;
 
+function cityRegionClass(city) {
+  if (city.metar?.startsWith('K')) return ' city-region-usa';
+  if (city.timezone?.startsWith('Europe/')) return ' city-region-europe';
+  if (city.timezone?.startsWith('Asia/')) return ' city-region-asia';
+  return ' city-region-other';
+}
+
 function renderCityList() {
   const cityList = document.getElementById('cityList');
   const query = citySearchQuery.trim().toLowerCase();
@@ -19,7 +26,7 @@ function renderCityList() {
   });
 
   cityList.innerHTML = cities.length ? cities.map((city) => `
-    <button class="city-button${city.id === activeCity.id ? ' active' : ''}" id="cityTab-${city.id}" type="button" onclick="switchCity('${city.id}')">
+    <button class="city-button${cityRegionClass(city)}${city.id === activeCity.id ? ' active' : ''}" id="cityTab-${city.id}" type="button" onclick="switchCity('${city.id}')">
       <span class="city-name-row">
         <span class="city-name">${city.name}</span>
         <span class="city-station">${city.metar}</span>
