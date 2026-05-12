@@ -25,65 +25,25 @@ body {
 
 button { font: inherit; }
 
-.app-header {
-  height: 64px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
-}
-
-.brand-mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  background: var(--orange);
-  color: #fff;
-  font-weight: 800;
-}
-
-.title-block {
-  min-width: 0;
-  flex: 1;
-}
-
 h1, h2 {
   letter-spacing: 0;
 }
 
-.title-block h1 {
-  font-size: 18px;
-  line-height: 1.15;
-}
-
-.title-block span,
-.header-time,
 .eyebrow,
+.current-time,
 .metar-updated {
   color: var(--dim);
 }
 
-.title-block span {
-  display: block;
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.header-time {
+.current-time {
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
 }
 
 .weather-layout {
-  height: calc(100vh - 64px);
-  min-height: calc(100vh - 64px);
+  height: 100vh;
+  min-height: 100vh;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
   overflow: hidden;
@@ -115,6 +75,13 @@ h1, h2 {
   align-items: center;
   gap: 24px;
   padding: 16px 18px;
+}
+
+.current-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
 }
 
 .eyebrow {
@@ -492,7 +459,7 @@ canvas#tempChartOverlay {
 
 .city-panel {
   min-width: 0;
-  height: calc(100vh - 64px);
+  height: 100vh;
   border-top: 0;
   border-right: 0;
   border-bottom: 0;
@@ -606,7 +573,7 @@ canvas#tempChartOverlay {
 
   .weather-layout {
     height: auto;
-    min-height: calc(100vh - 64px);
+    min-height: 100vh;
     grid-template-columns: 1fr;
     overflow: visible;
   }
@@ -649,15 +616,6 @@ canvas#tempChartOverlay {
 }
 
 @media (max-width: 620px) {
-  .app-header {
-    height: auto;
-    align-items: flex-start;
-  }
-
-  .header-time {
-    display: none;
-  }
-
   .weather-layout {
     min-height: 0;
   }
@@ -668,6 +626,10 @@ canvas#tempChartOverlay {
 
   .current-meta {
     grid-template-columns: 1fr;
+  }
+
+  .current-status {
+    align-items: flex-start;
   }
 
   .temp-now {

@@ -12,15 +12,6 @@
   <link rel="stylesheet" href="/assets/css/index.css" />
 </head>
 <body>
-  <header class="app-header">
-    <div class="brand-mark">W</div>
-    <div class="title-block">
-      <h1 id="pageTitle">Beijing Weather</h1>
-      <span id="stationLabel">ZBAA · Beijing Capital International Airport</span>
-    </div>
-    <div class="header-time" id="londonTime">--:--:--</div>
-  </header>
-
   <main class="weather-layout">
     <section class="weather-panel">
       <div class="current-strip">
@@ -46,7 +37,10 @@
             <span class="cf-value" id="cfWind">--</span>
           </div>
         </div>
-        <span class="metar-updated" id="metarUpd">--</span>
+        <div class="current-status">
+          <span class="current-time" id="londonTime">--:--:--</span>
+          <span class="metar-updated" id="metarUpd">--</span>
+        </div>
       </div>
 
       <div class="chart-section">

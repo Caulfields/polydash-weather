@@ -32,13 +32,15 @@ function fmtMetarAge(ts) {
 }
 
 function tickCityClock() {
+  const timeNode = document.getElementById('londonTime');
+  if (!timeNode) return;
   const time = new Date().toLocaleTimeString('en-GB', {
     timeZone: activeCity.timezone,
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
   });
-  document.getElementById('londonTime').textContent = `${time} ${activeCity.name}`;
+  timeNode.textContent = `${time} ${activeCity.name}`;
 }
 
 setInterval(() => {

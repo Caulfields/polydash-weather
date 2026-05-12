@@ -62,8 +62,10 @@ function renderModelDock() {
 }
 
 function setCityChrome() {
-  document.getElementById('pageTitle').textContent = `${activeCity.name} Weather`;
-  document.getElementById('stationLabel').textContent = `${activeCity.metar} · ${activeCity.airport}`;
+  const pageTitle = document.getElementById('pageTitle');
+  const stationLabel = document.getElementById('stationLabel');
+  if (pageTitle) pageTitle.textContent = `${activeCity.name} Weather`;
+  if (stationLabel) stationLabel.textContent = `${activeCity.metar} · ${activeCity.airport}`;
   document.getElementById('chartTitle').textContent = `${activeCity.metar} Temperature Today`;
   document.getElementById('tempNow').innerHTML = `--<span class="temp-unit">${tempUnitLabel()}</span>`;
   document.getElementById('metarRaw').textContent = 'loading...';
