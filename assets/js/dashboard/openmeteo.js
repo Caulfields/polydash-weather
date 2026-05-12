@@ -106,7 +106,7 @@ async function fetchOpenMeteo() {
       hourlyOmState = {
         dateKey: cityTodayKey(activeCity.timezone),
         rows: averaged.rows,
-        sourceLabel: averaged.label,
+        sourceLabel: 'Avg',
       };
       omData = null;
       document.getElementById('omLoading').style.display = 'none';

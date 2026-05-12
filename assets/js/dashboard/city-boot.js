@@ -399,7 +399,7 @@ async function rankForecastModelAverages() {
     hourlyOmState = {
       dateKey: cityTodayKey(activeCity.timezone),
       rows: bestCombo.rows,
-      sourceLabel: averagedModelsById[bestCombo.id].label,
+      sourceLabel: 'Avg',
     };
     omData = null;
     if (status) {
@@ -429,7 +429,7 @@ function selectForecastModel(modelId) {
     hourlyOmState = {
       dateKey: cityTodayKey(activeCity.timezone),
       rows: averaged.rows,
-      sourceLabel: averaged.label,
+      sourceLabel: 'Avg',
     };
     omData = null;
   } else {
