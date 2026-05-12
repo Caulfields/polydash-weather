@@ -1,8 +1,17 @@
 {
+  "version": 2,
+  "builds": [
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "assets/**", "use": "@vercel/static" },
+    { "src": "favicon/**", "use": "@vercel/static" },
+    { "src": "api/*.js", "use": "@vercel/node" }
+  ],
   "routes": [
-    { "src": "/api/metar", "dest": "/api/metar.js" },
-    { "src": "/api/forecast", "dest": "/api/forecast.js" },
-    { "handle": "filesystem" },
+    { "src": "/api/metar", "dest": "api/metar.js" },
+    { "src": "/api/forecast", "dest": "api/forecast.js" },
+    { "src": "/", "dest": "index.html" },
+    { "src": "/assets/(.*)", "dest": "assets/$1" },
+    { "src": "/favicon/(.*)", "dest": "favicon/$1" },
     { "src": "/.*", "dest": "/index.html" }
   ]
 }
