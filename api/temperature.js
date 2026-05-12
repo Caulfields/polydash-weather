@@ -6,7 +6,24 @@ function isSafeOrigin(req) {
   return !origin || origin.includes(host) || origin.includes('localhost');
 }
 
+function hasValidApiKey(req) {
+  const secret = process.env.API_SECRET;
+  if (!secret) return false;
+  const headerKey = req.headers['x-api-key'];
+  const auth = req.headers.authorization || '';
+  const bearerKey = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  return headerKey === secret || bearerKey === secret;
+}
+
 module.exports = async function handler(req, res) {
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.setHeader('Access-Control-Allow-Headers', 'X-API-Key, Authorization, Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.status(204).end();
+    return;
+  }
+
   if (!isSafeOrigin(req)) {
     res.status(403).end(JSON.stringify({ error: 'Forbidden' }));
     return;
@@ -16,6 +33,15 @@ module.exports = async function handler(req, res) {
   res.setHeader('Vary', 'Origin');
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'no-store');
+
+  if (!process.env.API_SECRET) {
+    res.status(500).end(JSON.stringify({ error: 'API_SECRET is not configured' }));
+    return;
+  }
+  if (!hasValidApiKey(req)) {
+    res.status(401).end(JSON.stringify({ error: 'Unauthorized' }));
+    return;
+  }
 
   const city = resolveCity(req.query.city || req.query.station);
   const unit = `${req.query.unit || ''}`.toUpperCase();

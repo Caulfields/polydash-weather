@@ -57,6 +57,10 @@ function getForecastRows() {
   }).filter(Boolean);
 }
 
+function observedTempOptions() {
+  return activeCity.usesUsMetarTenths ? { decimals: 1 } : { settle: activeTempUnit() === 'F' };
+}
+
 async function loadMetar() {
   const requestCityId = activeCity.id;
   try {
@@ -176,7 +180,7 @@ function updateMetarUI() {
   if (!metarToday.length) return;
   const latest = metarToday[metarToday.length - 1];
 
-  document.getElementById('tempNow').innerHTML = `${tempFromCelsius(latest.temp, { settle: activeTempUnit() === 'F' })}<span class="temp-unit">${tempUnitLabel()}</span>`;
+  document.getElementById('tempNow').innerHTML = `${tempFromCelsius(latest.temp, observedTempOptions())}<span class="temp-unit">${tempUnitLabel()}</span>`;
   document.getElementById('metarRaw').textContent = latest.rawOb;
   document.getElementById('cfWeather').textContent = parseMetarWeather(latest.rawOb);
   document.getElementById('cfWind').textContent =
@@ -184,8 +188,8 @@ function updateMetarUI() {
     (latest.wspd != null ? ` ${latest.wspd}kt` : '');
 
   const temps = metarToday.map((item) => item.temp);
-  document.getElementById('cfMin').textContent = formatTempFromCelsius(Math.min(...temps), { settle: activeTempUnit() === 'F' });
-  document.getElementById('cfMax').textContent = formatTempFromCelsius(Math.max(...temps), { settle: activeTempUnit() === 'F' });
+  document.getElementById('cfMin').textContent = formatTempFromCelsius(Math.min(...temps), observedTempOptions());
+  document.getElementById('cfMax').textContent = formatTempFromCelsius(Math.max(...temps), observedTempOptions());
 }
 
 function cityTimeParts(date) {
@@ -242,7 +246,7 @@ function drawChart() {
   const chartHeight = height - pad.top - pad.bottom;
   const xOfHr = (hour) => pad.left + (hour / 24) * chartWidth;
 
-  const displayToday = observedToday.map((item) => tempFromCelsius(item.temp, { settle: activeTempUnit() === 'F' }));
+  const displayToday = observedToday.map((item) => tempFromCelsius(item.temp, observedTempOptions()));
   const displayForecast = forecastRows.map((item) => tempFromCelsius(item.temp, { decimals: 1 }));
   const allTemps = [...displayToday, ...displayForecast].filter((value) => value != null);
   const rawMin = Math.min(...allTemps);
@@ -351,7 +355,7 @@ function drawChart() {
     ctx.beginPath();
     observedToday.forEach((item, index) => {
       const x = xOfHr(toHourFrac(item.time));
-      const y = yOf(tempFromCelsius(item.temp, { settle: activeTempUnit() === 'F' }));
+      const y = yOf(tempFromCelsius(item.temp, observedTempOptions()));
       index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     });
     const lastX = xOfHr(toHourFrac(observedToday[observedToday.length - 1].time));
@@ -368,7 +372,7 @@ function drawChart() {
     ctx.lineJoin = 'round';
     observedToday.forEach((item, index) => {
       const x = xOfHr(toHourFrac(item.time));
-      const y = yOf(tempFromCelsius(item.temp, { settle: activeTempUnit() === 'F' }));
+      const y = yOf(tempFromCelsius(item.temp, observedTempOptions()));
       index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     });
     ctx.stroke();
@@ -377,7 +381,7 @@ function drawChart() {
       const minutes = item.time.getMinutes();
       if (minutes !== 0 && minutes !== 30) continue;
       const x = xOfHr(toHourFrac(item.time));
-      const y = yOf(tempFromCelsius(item.temp, { settle: activeTempUnit() === 'F' }));
+      const y = yOf(tempFromCelsius(item.temp, observedTempOptions()));
       ctx.beginPath();
       ctx.arc(x, y, 2.5, 0, Math.PI * 2);
       ctx.fillStyle = '#f97316';
@@ -386,7 +390,7 @@ function drawChart() {
 
     const latest = observedToday[observedToday.length - 1];
     const latestX = xOfHr(toHourFrac(latest.time));
-    const latestDisplay = tempFromCelsius(latest.temp, { settle: activeTempUnit() === 'F' });
+    const latestDisplay = tempFromCelsius(latest.temp, observedTempOptions());
     const latestY = yOf(latestDisplay);
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 11px Inter,system-ui,sans-serif';
@@ -480,7 +484,7 @@ function setupChartMouse() {
 
     if (observedCandidate) {
       const x = xOfHr(toHourFrac(observedCandidate.time));
-      const y = yOf(tempFromCelsius(observedCandidate.temp, { settle: activeTempUnit() === 'F' }));
+      const y = yOf(tempFromCelsius(observedCandidate.temp, observedTempOptions()));
       ctx.beginPath();
       ctx.arc(x, y, 5, 0, Math.PI * 2);
       ctx.fillStyle = '#f97316';
@@ -508,7 +512,7 @@ function setupChartMouse() {
     document.getElementById('ttTime').textContent = `${labelHour.toString().padStart(2, '0')}:00 ${activeCity.name}`;
 
     document.getElementById('ttMetarTemp').textContent = observedCandidate
-      ? formatTempFromCelsius(observedCandidate.temp, { settle: activeTempUnit() === 'F' })
+      ? formatTempFromCelsius(observedCandidate.temp, observedTempOptions())
       : '--';
     document.getElementById('ttMetarNote').textContent = observedCandidate
       ? (observedCandidate.weather || 'observed')

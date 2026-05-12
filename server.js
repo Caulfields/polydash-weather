@@ -64,6 +64,15 @@ function normalizeModel(value) {
   return /^[a-z0-9_]+$/.test(model) ? model : '';
 }
 
+function hasValidApiKey(req) {
+  const secret = process.env.API_SECRET;
+  if (!secret) return false;
+  const headerKey = req.get('x-api-key');
+  const auth = req.get('authorization') || '';
+  const bearerKey = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  return headerKey === secret || bearerKey === secret;
+}
+
 async function fetchMetarData(station, hours) {
   const url = `https://aviationweather.gov/api/data/metar?ids=${station}&format=json&taf=false&hours=${hours}`;
   const json = await fetchJson(url);
@@ -172,6 +181,15 @@ app.get('/api/forecast', async (req, res) => {
 
 app.get('/api/temperature', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
+
+  if (!process.env.API_SECRET) {
+    res.status(500).json({ error: 'API_SECRET is not configured' });
+    return;
+  }
+  if (!hasValidApiKey(req)) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
 
   const city = resolveCity(req.query.city || req.query.station);
   const unit = `${req.query.unit || ''}`.toUpperCase();

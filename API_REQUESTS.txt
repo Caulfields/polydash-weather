@@ -10,6 +10,8 @@ Use this endpoint from a bot or external service to get today's forecast maximum
 temperature for a city, plus the accuracy of the best single forecast model and
 the best averaged model combination.
 
+This endpoint is private. Requests must include your secret API key.
+
 
 Query Parameters
 ----------------
@@ -32,14 +34,23 @@ Examples
 
 Local development:
 
-  http://localhost:3000/api/temperature?city=London&unit=C
-  http://localhost:3000/api/temperature?station=EGLC&unit=C
-  http://localhost:3000/api/temperature?city=New%20York&unit=F
+  curl -H "X-API-Key: YOUR_SECRET_VALUE" "http://localhost:3000/api/temperature?city=London&unit=C"
+  curl -H "X-API-Key: YOUR_SECRET_VALUE" "http://localhost:3000/api/temperature?station=EGLC&unit=C"
+  curl -H "Authorization: Bearer YOUR_SECRET_VALUE" "http://localhost:3000/api/temperature?city=New%20York&unit=F"
 
 Production:
 
-  https://YOUR_DOMAIN/api/temperature?city=London&unit=C
-  https://YOUR_DOMAIN/api/temperature?station=KLGA&unit=F
+  curl -H "X-API-Key: YOUR_SECRET_VALUE" "https://YOUR_DOMAIN/api/temperature?city=London&unit=C"
+  curl -H "X-API-Key: YOUR_SECRET_VALUE" "https://YOUR_DOMAIN/api/temperature?station=KLGA&unit=F"
+
+JavaScript fetch example:
+
+  const res = await fetch("https://YOUR_DOMAIN/api/temperature?city=London&unit=C", {
+    headers: {
+      "X-API-Key": process.env.API_SECRET
+    }
+  });
+  const data = await res.json();
 
 
 Example Response
@@ -125,21 +136,37 @@ averageImprovesBestModel
 Security Notes
 --------------
 
-The current API does not require an API key. That is acceptable if the endpoint is
-public and low-risk, but there are tradeoffs:
+The temperature API requires an API key. Set the secret in your deployment
+environment as:
 
-1. Anyone can call the endpoint if they know the URL.
-2. A public GitHub repository is fine for this code, but never commit private API
+  API_SECRET=YOUR_SECRET_VALUE
+
+The bot must send the same value in one of these headers:
+
+  X-API-Key: YOUR_SECRET_VALUE
+
+or:
+
+  Authorization: Bearer YOUR_SECRET_VALUE
+
+If API_SECRET is not configured, the endpoint returns:
+
+  500 API_SECRET is not configured
+
+If the key is missing or incorrect, the endpoint returns:
+
+  401 Unauthorized
+
+Keep these rules:
+
+1. A public GitHub repository is fine for this code, but never commit private API
    keys, bot tokens, passwords, cookies, or deployment secrets.
-3. This endpoint calls external weather services. Heavy public traffic could slow
+2. Store API_SECRET in Vercel environment variables, not in GitHub.
+3. This endpoint calls external weather services. Heavy traffic could slow
    the site down or hit upstream rate limits.
-4. If only your bot should call this endpoint, add a shared secret header such as:
-
-     X-API-Key: YOUR_SECRET_VALUE
-
-   Store the secret in Vercel environment variables, not in GitHub.
-5. If the endpoint stays public, consider adding rate limiting at the hosting or
-   proxy layer.
+4. If the key is ever exposed, rotate it by changing API_SECRET in Vercel and in
+   the bot.
+5. If traffic grows, also add rate limiting at the hosting or proxy layer.
 
 Recommended setup for a private bot:
 
@@ -147,4 +174,3 @@ Recommended setup for a private bot:
   - Configure the bot to send X-API-Key with every request.
   - Reject API requests when the header is missing or incorrect.
   - Keep the GitHub repository public only if it contains no secrets.
-
