@@ -1,0 +1,150 @@
+Temperature Ranking API
+=======================
+
+Endpoint
+--------
+
+GET /api/temperature
+
+Use this endpoint from a bot or external service to get today's forecast maximum
+temperature for a city, plus the accuracy of the best single forecast model and
+the best averaged model combination.
+
+
+Query Parameters
+----------------
+
+city
+  City name, city id, or METAR station code.
+  Examples: London, london, New York, KLGA, Beijing, ZBAA
+
+station
+  Alternative to city. Use a METAR station code.
+  Examples: EGLC, KLGA, KDAL
+
+unit
+  Optional. C or F.
+  If omitted, the API uses the city's default unit.
+
+
+Examples
+--------
+
+Local development:
+
+  http://localhost:3000/api/temperature?city=London&unit=C
+  http://localhost:3000/api/temperature?station=EGLC&unit=C
+  http://localhost:3000/api/temperature?city=New%20York&unit=F
+
+Production:
+
+  https://YOUR_DOMAIN/api/temperature?city=London&unit=C
+  https://YOUR_DOMAIN/api/temperature?station=KLGA&unit=F
+
+
+Example Response
+----------------
+
+{
+  "city": {
+    "id": "london",
+    "name": "London",
+    "station": "EGLC",
+    "timezone": "Europe/London"
+  },
+  "date": "2026-05-12",
+  "unit": "C",
+  "generatedAt": "2026-05-12T22:44:25.628Z",
+  "observations": {
+    "count": 48,
+    "latestTime": "2026-05-12T22:20:00.000Z"
+  },
+  "bestModel": {
+    "id": "auto",
+    "name": "Best match",
+    "modelIds": ["auto"],
+    "modelNames": ["Best match"],
+    "maxTemperature": {
+      "celsius": 16.4,
+      "value": 16.4,
+      "unit": "C",
+      "time": "2026-05-12T15:00",
+      "label": "15:00"
+    },
+    "accuracy": {
+      "maeC": 0.61,
+      "rmseC": 0.73,
+      "windMaeKmh": 3.66,
+      "matches": 24,
+      "score": 0.942
+    }
+  },
+  "bestAverageModel": {
+    "id": "avg_auto__knmi_seamless__meteofrance_arome_france",
+    "name": "avg_auto__knmi_seamless__meteofrance_arome_france",
+    "modelIds": ["auto", "knmi_seamless", "meteofrance_arome_france"],
+    "modelNames": ["Best match", "KNMI Seamless", "AROME France"],
+    "maxTemperature": {
+      "celsius": 16.6,
+      "value": 16.6,
+      "unit": "C",
+      "time": "2026-05-12T16:00",
+      "label": "16:00"
+    },
+    "accuracy": {
+      "maeC": 0.54,
+      "rmseC": 0.68,
+      "windMaeKmh": 3.07,
+      "matches": 24,
+      "score": 0.835
+    }
+  },
+  "averageImprovesBestModel": true
+}
+
+
+Fields To Use In A Bot
+----------------------
+
+bestModel.maxTemperature.value
+  Maximum temperature predicted by the best single model.
+
+bestModel.accuracy.maeC
+  Mean absolute temperature error in Celsius. Lower is better.
+
+bestAverageModel.maxTemperature.value
+  Maximum temperature predicted by the best averaged model combination.
+
+bestAverageModel.accuracy.maeC
+  Mean absolute temperature error for the averaged model. Lower is better.
+
+averageImprovesBestModel
+  true when the averaged model is more accurate than the best single model.
+
+
+Security Notes
+--------------
+
+The current API does not require an API key. That is acceptable if the endpoint is
+public and low-risk, but there are tradeoffs:
+
+1. Anyone can call the endpoint if they know the URL.
+2. A public GitHub repository is fine for this code, but never commit private API
+   keys, bot tokens, passwords, cookies, or deployment secrets.
+3. This endpoint calls external weather services. Heavy public traffic could slow
+   the site down or hit upstream rate limits.
+4. If only your bot should call this endpoint, add a shared secret header such as:
+
+     X-API-Key: YOUR_SECRET_VALUE
+
+   Store the secret in Vercel environment variables, not in GitHub.
+5. If the endpoint stays public, consider adding rate limiting at the hosting or
+   proxy layer.
+
+Recommended setup for a private bot:
+
+  - Add API_SECRET in Vercel environment variables.
+  - Configure the bot to send X-API-Key with every request.
+  - Reject API requests when the header is missing or incorrect.
+  - Keep the GitHub repository public only if it contains no secrets.
+
