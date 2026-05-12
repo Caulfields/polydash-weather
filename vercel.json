@@ -9,6 +9,7 @@
   "routes": [
     { "src": "/api/metar", "dest": "api/metar.js" },
     { "src": "/api/forecast", "dest": "api/forecast.js" },
+    { "src": "/api/temperature", "dest": "api/temperature.js" },
     { "src": "/", "dest": "index.html" },
     { "src": "/assets/(.*)", "dest": "assets/$1" },
     { "src": "/favicon/(.*)", "dest": "favicon/$1" },

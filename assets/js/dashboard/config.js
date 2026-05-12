@@ -252,3 +252,11 @@ let chartState = null;
 let omData = null;
 let omMode = 'best';
 let hourlyOmState = null;
+
+if (typeof module !== 'undefined') {
+  module.exports = {
+    WEATHER_MODELS,
+    US_MODELS,
+    CITIES,
+  };
+}

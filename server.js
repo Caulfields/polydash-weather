@@ -4,6 +4,7 @@ const express = require('express');
 const https = require('https');
 const path = require('path');
 const { STATIONS, normalizeStation } = require('./data/weather-stations');
+const { resolveCity, rankTemperature } = require('./lib/weather-ranking');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -165,6 +166,30 @@ app.get('/api/forecast', async (req, res) => {
       res.json(cache.data);
       return;
     }
+    res.status(502).json({ error: error.message });
+  }
+});
+
+app.get('/api/temperature', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+
+  const city = resolveCity(req.query.city || req.query.station);
+  const unit = `${req.query.unit || ''}`.toUpperCase();
+  if (!city) {
+    res.status(400).json({
+      error: 'Unknown city or station',
+      hint: 'Use ?city=London, ?city=london, or ?station=EGLC',
+    });
+    return;
+  }
+  if (unit && !['C', 'F'].includes(unit)) {
+    res.status(400).json({ error: 'Invalid unit. Use C or F.' });
+    return;
+  }
+
+  try {
+    res.json(await rankTemperature(city, { unit }));
+  } catch (error) {
     res.status(502).json({ error: error.message });
   }
 });
