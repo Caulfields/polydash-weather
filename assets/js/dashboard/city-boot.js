@@ -12,6 +12,13 @@ function cityRegionClass(city) {
   return ' city-region-other';
 }
 
+function cityRegionRank(city) {
+  if (city.timezone?.startsWith('Asia/')) return 0;
+  if (city.timezone?.startsWith('Europe/')) return 1;
+  if (city.metar?.startsWith('K')) return 3;
+  return 2;
+}
+
 function renderCityList() {
   const cityList = document.getElementById('cityList');
   const query = citySearchQuery.trim().toLowerCase();
@@ -23,7 +30,7 @@ function renderCityList() {
       city.airport,
       city.timezone,
     ].some((value) => `${value || ''}`.toLowerCase().includes(query));
-  });
+  }).sort((a, b) => cityRegionRank(a) - cityRegionRank(b));
 
   cityList.innerHTML = cities.length ? cities.map((city) => `
     <button class="city-button${cityRegionClass(city)}${city.id === activeCity.id ? ' active' : ''}" id="cityTab-${city.id}" type="button" onclick="switchCity('${city.id}')">
