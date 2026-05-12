@@ -260,7 +260,7 @@ async function rankForecastModels() {
   const runCityId = activeCity.id;
   const status = document.getElementById('modelRankStatus');
   const baseOptions = activeCity.modelOptions?.length ? activeCity.modelOptions : US_MODELS.slice(0, 10);
-  const candidates = baseOptions.slice(0, baseOptions.length >= 20 ? 20 : 10).filter((id) => id !== 'auto');
+  const candidates = baseOptions.slice(0, baseOptions.length >= 20 ? 20 : 10);
 
   setRankingButtonsDisabled(true);
   if (status) status.textContent = 'Loading observations...';
@@ -312,7 +312,7 @@ async function rankForecastModelAverages() {
   const runCityId = activeCity.id;
   const status = document.getElementById('modelRankStatus');
   const baseOptions = activeCity.modelOptions?.length ? activeCity.modelOptions : US_MODELS.slice(0, 10);
-  const candidates = baseOptions.slice(0, baseOptions.length >= 20 ? 20 : 10).filter((id) => id !== 'auto');
+  const candidates = baseOptions.slice(0, baseOptions.length >= 20 ? 20 : 10);
 
   rankedModelIds = [];
   modelScoresById = {};
