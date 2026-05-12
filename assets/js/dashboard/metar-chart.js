@@ -18,30 +18,59 @@ function parseUsMetarTenths(rawOb) {
   };
 }
 
-function marketTempFromC(tempC) {
-  if (!Number.isFinite(tempC)) return null;
-  if (activeCity.marketUnit === 'F') return Math.round((tempC * 9) / 5 + 32);
-  return tempC;
-}
+function getForecastRows() {
+  if (hourlyOmState?.rows?.length) {
+    return hourlyOmState.rows.map((row) => ({
+      hourFrac: row.hourFrac,
+      temp: row.temp,
+      rain: row.rain || 0,
+      rainProb: row.rainProb,
+      windSpeed: row.windSpeed,
+      windDir: row.windDir,
+      label: row.label,
+      sourceLabel: hourlyOmState.sourceLabel || activeCity.omSourceLabel || 'Open-Meteo',
+    }));
+  }
 
-function marketThresholdToCelsius(value) {
-  if (!Number.isFinite(value)) return null;
-  if (activeCity.marketUnit === 'F') return ((value - 32) * 5) / 9;
-  return value;
+  const h = omData?.minutely_15;
+  if (!h?.time?.length) return [];
+
+  const temps = h.temperature_2m || [];
+  const rain = h.precipitation || [];
+  const windSpeed = h.wind_speed_10m || [];
+  const windDir = h.wind_direction_10m || [];
+
+  return h.time.map((time, index) => {
+    const temp = temps[index];
+    if (typeof temp !== 'number') return null;
+    const hour = parseInt(time.substring(11, 13), 10);
+    const minute = parseInt(time.substring(14, 16), 10);
+    return {
+      hourFrac: hour + minute / 60,
+      temp,
+      rain: typeof rain[index] === 'number' ? rain[index] : 0,
+      windSpeed: typeof windSpeed[index] === 'number' ? windSpeed[index] : null,
+      windDir: typeof windDir[index] === 'number' ? windDir[index] : null,
+      label: time.substring(11, 16),
+      sourceLabel: activeCity.omSourceLabel || 'Open-Meteo',
+    };
+  }).filter(Boolean);
 }
 
 async function loadMetar() {
+  const requestCityId = activeCity.id;
   try {
-    const res = await fetch(`/api/metar?station=${activeCity.metar}`);
+    const res = await fetch(`/api/metar?station=${activeCity.metar}`, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const raw = await res.json();
+    if (requestCityId !== activeCity.id) return;
 
     const obs = raw
       .filter((row) => row.temp != null)
       .map((row) => {
         const precise = activeCity.usesUsMetarTenths ? parseUsMetarTenths(row.rawOb) : null;
         return {
-          time: new Date(row.reportTime || row.obsTime),
+          time: parseObsDate(row.reportTime ?? row.obsTime),
           temp: precise?.tempC ?? row.temp,
           dewp: precise?.dewpC ?? row.dewp,
           wspd: row.wspd,
@@ -50,13 +79,12 @@ async function loadMetar() {
           weather: parseMetarWeather(row.rawOb),
         };
       })
+      .filter((row) => Number.isFinite(row.time.getTime()) && Number.isFinite(row.temp))
       .sort((a, b) => a.time - b.time);
 
     const todayStr = cityDateStr(new Date());
-    const yesterdayStr = cityDateStr(new Date(Date.now() - 86400000));
 
     metarToday = obs.filter((item) => cityDateStr(item.time) === todayStr);
-    metarYesterday = obs.filter((item) => cityDateStr(item.time) === yesterdayStr);
     metarObsTime = metarToday.length ? metarToday[metarToday.length - 1].time.getTime() : Date.now();
 
     document.getElementById('chartTitle').textContent = `${activeCity.metar} Temperature Today`;
@@ -66,7 +94,15 @@ async function loadMetar() {
   } catch (error) {
     console.warn('METAR fetch:', error.message);
     document.getElementById('metarRaw').textContent = 'METAR unavailable';
+    drawChart();
   }
+}
+
+function parseObsDate(value) {
+  if (typeof value === 'number') {
+    return new Date(value < 1e12 ? value * 1000 : value);
+  }
+  return new Date(value);
 }
 
 function parseMetarWeather(rawOb) {
@@ -133,7 +169,7 @@ function parseMetarWeather(rawOb) {
       bestLabel = skyLabel[match[1]];
     }
   }
-  return bestLabel || '\u2014';
+  return bestLabel || '--';
 }
 
 function updateMetarUI() {
@@ -144,7 +180,7 @@ function updateMetarUI() {
   document.getElementById('metarRaw').textContent = latest.rawOb;
   document.getElementById('cfWeather').textContent = parseMetarWeather(latest.rawOb);
   document.getElementById('cfWind').textContent =
-    (latest.wdir === 'VRB' ? 'VRB' : latest.wdir != null ? `${latest.wdir}\u00B0` : '\u2014') +
+    (latest.wdir === 'VRB' ? 'VRB' : latest.wdir != null ? `${latest.wdir}\u00B0` : '--') +
     (latest.wspd != null ? ` ${latest.wspd}kt` : '');
 
   const temps = metarToday.map((item) => item.temp);
@@ -169,6 +205,11 @@ function toHourFrac(date) {
   return parseInt(parts.hour, 10) + parseInt(parts.minute, 10) / 60 + parseInt(parts.second, 10) / 3600;
 }
 
+function currentCityHourFrac() {
+  const parts = cityTimeParts(new Date());
+  return parseInt(parts.hour, 10) + parseInt(parts.minute, 10) / 60 + parseInt(parts.second, 10) / 3600;
+}
+
 function drawChart() {
   const canvas = document.getElementById('tempChart');
   const wrap = canvas.parentElement;
@@ -184,11 +225,15 @@ function drawChart() {
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, width, height);
 
-  if (!metarToday.length) {
+  const forecastRows = getForecastRows();
+  const nowHour = currentCityHourFrac();
+  const observedToday = metarToday.filter((item) => toHourFrac(item.time) <= nowHour + 0.25);
+
+  if (!observedToday.length && !forecastRows.length) {
     ctx.fillStyle = 'rgba(139,146,169,0.4)';
     ctx.font = '12px Inter,system-ui,sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('No METAR data', width / 2, height / 2);
+    ctx.fillText('No weather data', width / 2, height / 2);
     return;
   }
 
@@ -197,15 +242,16 @@ function drawChart() {
   const chartHeight = height - pad.top - pad.bottom;
   const xOfHr = (hour) => pad.left + (hour / 24) * chartWidth;
 
-  const displayToday = metarToday.map((item) => tempFromCelsius(item.temp, { settle: activeTempUnit() === 'F' }));
-  const displayYesterday = metarYesterday.map((item) => tempFromCelsius(item.temp, { settle: activeTempUnit() === 'F' }));
-  const allTemps = [...displayToday, ...displayYesterday].filter((value) => value != null);
+  const displayToday = observedToday.map((item) => tempFromCelsius(item.temp, { settle: activeTempUnit() === 'F' }));
+  const displayForecast = forecastRows.map((item) => tempFromCelsius(item.temp, { decimals: 1 }));
+  const allTemps = [...displayToday, ...displayForecast].filter((value) => value != null);
   const rawMin = Math.min(...allTemps);
   const rawMax = Math.max(...allTemps);
   const yPad = Math.max(1, Math.round((rawMax - rawMin) * 0.15));
   const yMin = rawMin - yPad;
   const yMax = rawMax + yPad;
-  const yOf = (value) => pad.top + (1 - (value - yMin) / (yMax - yMin)) * chartHeight;
+  const yRange = Math.max(yMax - yMin, 1);
+  const yOf = (value) => pad.top + (1 - (value - yMin) / yRange) * chartHeight;
 
   ctx.lineWidth = 1;
   const step = rawMax - rawMin <= 6 ? 1 : 2;
@@ -235,66 +281,81 @@ function drawChart() {
     ctx.stroke();
   }
 
-  if (metarToday.length) {
-    const curTemp = marketTempFromC(metarToday[metarToday.length - 1].temp);
-    const sortedMarkets = [...getMarkets()].sort((a, b) => a.threshold - b.threshold);
-    const activeMarket = sortedMarkets.filter((market) => market.threshold <= curTemp).pop() ?? sortedMarkets[0];
-    const thresholdValue = activeMarket ? activeMarket.threshold : null;
-    const label = activeMarket ? activeMarket.label : '';
-    const y = thresholdValue != null ? yOf(thresholdValue) : null;
-    const nowX = xOfHr(toHourFrac(metarToday[metarToday.length - 1].time));
-    if (y != null && y >= pad.top && y <= pad.top + chartHeight) {
+  const nowX = xOfHr(nowHour);
+  if (nowX >= pad.left && nowX <= pad.left + chartWidth) {
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(231,235,244,0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(nowX, pad.top);
+    ctx.lineTo(nowX, pad.top + chartHeight);
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = 'rgba(231,235,244,0.55)';
+    ctx.font = '10px Inter,system-ui,sans-serif';
+    ctx.textAlign = nowX > width - 52 ? 'right' : 'left';
+    ctx.fillText('now', nowX + (ctx.textAlign === 'left' ? 5 : -5), pad.top + 10);
+  }
+
+  if (forecastRows.length) {
+    const rMax = Math.max(0.5, ...forecastRows.map((row) => row.rain || 0));
+    const rainH = chartHeight * 0.18;
+    const rainBase = pad.top + chartHeight;
+    const barW = Math.max(2, chartWidth / 48);
+
+    forecastRows.forEach((row) => {
+      if ((row.rain || 0) <= 0) return;
+      const x = xOfHr(row.hourFrac) - barW / 2;
+      const barHeight = Math.min((row.rain / rMax) * rainH, rainH);
+      ctx.fillStyle = 'rgba(96,165,250,0.24)';
+      ctx.fillRect(x, rainBase - barHeight, barW, barHeight);
+    });
+
+    if (forecastRows.length >= 2) {
       ctx.save();
-      ctx.setLineDash([5, 4]);
-      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.setLineDash([8, 5]);
+      ctx.strokeStyle = '#60a5fa';
+      ctx.lineWidth = 2.25;
+      ctx.lineJoin = 'round';
       ctx.beginPath();
-      ctx.moveTo(nowX, y);
-      ctx.lineTo(pad.left + chartWidth, y);
+      forecastRows.forEach((row, index) => {
+        const x = xOfHr(row.hourFrac);
+        const y = yOf(tempFromCelsius(row.temp, { decimals: 1 }));
+        index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
       ctx.stroke();
       ctx.restore();
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.font = '10px Inter,system-ui,sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(label, pad.left + 4, y - 3);
+
+      forecastRows.forEach((row) => {
+        if (Math.round(row.hourFrac) % 3 !== 0 || Math.abs(row.hourFrac - Math.round(row.hourFrac)) > 0.01) return;
+        const x = xOfHr(row.hourFrac);
+        const y = yOf(tempFromCelsius(row.temp, { decimals: 1 }));
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#60a5fa';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(13,15,20,0.85)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      });
     }
   }
 
-  if (metarYesterday.length >= 2) {
-    ctx.save();
-    ctx.setLineDash([3, 5]);
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = 'rgba(139,146,169,0.4)';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    metarYesterday.forEach((item, index) => {
-      const x = xOfHr(toHourFrac(item.time));
-      const y = yOf(tempFromCelsius(item.temp, { settle: activeTempUnit() === 'F' }));
-      index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-    ctx.restore();
-
-    const last = metarYesterday[metarYesterday.length - 1];
-    ctx.fillStyle = 'rgba(139,146,169,0.5)';
-    ctx.font = '9px Inter,system-ui,sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('yday', xOfHr(toHourFrac(last.time)) + 3, yOf(tempFromCelsius(last.temp, { settle: activeTempUnit() === 'F' })) + 3);
-  }
-
-  if (metarToday.length >= 1) {
+  if (observedToday.length >= 1) {
     const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartHeight);
     gradient.addColorStop(0, 'rgba(249,115,22,0.30)');
     gradient.addColorStop(0.7, 'rgba(249,115,22,0.06)');
     gradient.addColorStop(1, 'rgba(249,115,22,0)');
 
     ctx.beginPath();
-    metarToday.forEach((item, index) => {
+    observedToday.forEach((item, index) => {
       const x = xOfHr(toHourFrac(item.time));
       const y = yOf(tempFromCelsius(item.temp, { settle: activeTempUnit() === 'F' }));
       index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     });
-    const lastX = xOfHr(toHourFrac(metarToday[metarToday.length - 1].time));
-    const firstX = xOfHr(toHourFrac(metarToday[0].time));
+    const lastX = xOfHr(toHourFrac(observedToday[observedToday.length - 1].time));
+    const firstX = xOfHr(toHourFrac(observedToday[0].time));
     ctx.lineTo(lastX, pad.top + chartHeight);
     ctx.lineTo(firstX, pad.top + chartHeight);
     ctx.closePath();
@@ -305,14 +366,14 @@ function drawChart() {
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#f97316';
     ctx.lineJoin = 'round';
-    metarToday.forEach((item, index) => {
+    observedToday.forEach((item, index) => {
       const x = xOfHr(toHourFrac(item.time));
       const y = yOf(tempFromCelsius(item.temp, { settle: activeTempUnit() === 'F' }));
       index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     });
     ctx.stroke();
 
-    for (const item of metarToday) {
+    for (const item of observedToday) {
       const minutes = item.time.getMinutes();
       if (minutes !== 0 && minutes !== 30) continue;
       const x = xOfHr(toHourFrac(item.time));
@@ -323,7 +384,7 @@ function drawChart() {
       ctx.fill();
     }
 
-    const latest = metarToday[metarToday.length - 1];
+    const latest = observedToday[observedToday.length - 1];
     const latestX = xOfHr(toHourFrac(latest.time));
     const latestDisplay = tempFromCelsius(latest.temp, { settle: activeTempUnit() === 'F' });
     const latestY = yOf(latestDisplay);
@@ -339,13 +400,14 @@ function drawChart() {
   overlay.style.width = `${width}px`;
   overlay.style.height = `${height}px`;
 
-  chartState = { PAD: pad, cW: chartWidth, cH: chartHeight, W: width, H: height, xOfHr, yOf, dpr };
+  chartState = { PAD: pad, cW: chartWidth, cH: chartHeight, W: width, H: height, xOfHr, yOf, dpr, forecastRows, observedToday };
 }
 
 function buildLegend() {
   document.getElementById('chartLegend').innerHTML =
-    '<div class="legend-item"><div class="legend-dot" style="background:#f97316"></div><span>Today</span></div>' +
-    '<div class="legend-item"><div class="legend-dot" style="background:rgba(139,146,169,0.5);border-top:1px dashed rgba(139,146,169,0.5);height:0"></div><span>Yesterday</span></div>';
+    '<div class="legend-item"><div class="legend-dot" style="background:#f97316"></div><span>METAR</span></div>' +
+    '<div class="legend-item"><div class="legend-dot" style="background:#60a5fa;border-top:2px dashed #60a5fa;height:0"></div><span>Forecast</span></div>' +
+    '<div class="legend-item"><div class="legend-dot" style="background:rgba(96,165,250,0.35);height:8px"></div><span>Rain</span></div>';
 }
 
 let resizeTimer;
@@ -360,7 +422,7 @@ function setupChartMouse() {
 
   overlay.addEventListener('mousemove', (event) => {
     if (!chartState) return;
-    const { PAD, cW, cH, W, xOfHr, yOf, dpr } = chartState;
+    const { PAD, cW, cH, W, xOfHr, yOf, dpr, forecastRows, observedToday } = chartState;
 
     const rect = overlay.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
@@ -375,33 +437,35 @@ function setupChartMouse() {
       return;
     }
 
-    let nearestToday = null;
-    let minDist = Infinity;
-    for (const item of metarToday) {
+    let nearestObserved = null;
+    let minDistObserved = Infinity;
+    for (const item of observedToday || []) {
       const dist = Math.abs(toHourFrac(item.time) - hoverHr);
-      if (dist < minDist) {
-        minDist = dist;
-        nearestToday = item;
+      if (dist < minDistObserved) {
+        minDistObserved = dist;
+        nearestObserved = item;
       }
     }
 
-    let nearestYday = null;
-    let minDistY = Infinity;
-    for (const item of metarYesterday) {
-      const dist = Math.abs(toHourFrac(item.time) - hoverHr);
-      if (dist < minDistY) {
-        minDistY = dist;
-        nearestYday = item;
+    let nearestForecast = null;
+    let minDistForecast = Infinity;
+    for (const item of forecastRows || []) {
+      const dist = Math.abs(item.hourFrac - hoverHr);
+      if (dist < minDistForecast) {
+        minDistForecast = dist;
+        nearestForecast = item;
       }
     }
 
-    if (!nearestToday || minDist > 0.6) {
+    const observedCandidate = nearestObserved && minDistObserved <= 0.6 ? nearestObserved : null;
+    const forecastCandidate = nearestForecast && minDistForecast <= 0.6 ? nearestForecast : null;
+
+    if (!observedCandidate && !forecastCandidate) {
       tooltip.classList.remove('visible');
       return;
     }
 
-    const snapX = xOfHr(toHourFrac(nearestToday.time));
-    const snapY = yOf(tempFromCelsius(nearestToday.temp, { settle: activeTempUnit() === 'F' }));
+    const selectedX = xOfHr(forecastCandidate?.hourFrac ?? toHourFrac(observedCandidate.time));
 
     ctx.save();
     ctx.scale(dpr, dpr);
@@ -409,35 +473,57 @@ function setupChartMouse() {
     ctx.lineWidth = 1;
     ctx.strokeStyle = 'rgba(255,255,255,0.22)';
     ctx.beginPath();
-    ctx.moveTo(snapX, PAD.top);
-    ctx.lineTo(snapX, PAD.top + cH);
+    ctx.moveTo(selectedX, PAD.top);
+    ctx.lineTo(selectedX, PAD.top + cH);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    ctx.beginPath();
-    ctx.arc(snapX, snapY, 5, 0, Math.PI * 2);
-    ctx.fillStyle = '#f97316';
-    ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    if (nearestYday && minDistY < 0.6) {
-      const ydayY = yOf(tempFromCelsius(nearestYday.temp, { settle: activeTempUnit() === 'F' }));
+    if (observedCandidate) {
+      const x = xOfHr(toHourFrac(observedCandidate.time));
+      const y = yOf(tempFromCelsius(observedCandidate.temp, { settle: activeTempUnit() === 'F' }));
       ctx.beginPath();
-      ctx.arc(snapX, ydayY, 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(139,146,169,0.6)';
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#f97316';
       ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    if (forecastCandidate) {
+      const x = xOfHr(forecastCandidate.hourFrac);
+      const y = yOf(tempFromCelsius(forecastCandidate.temp, { decimals: 1 }));
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#60a5fa';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
     }
 
     ctx.restore();
 
-    const timeParts = cityTimeParts(nearestToday.time);
-    document.getElementById('ttTime').textContent = `${timeParts.hour}:${timeParts.minute} ${activeCity.name.slice(0, 3).toUpperCase()}`;
-    document.getElementById('ttTemp').textContent = formatTempFromCelsius(nearestToday.temp, { settle: activeTempUnit() === 'F' });
-    document.getElementById('ttWx').textContent = nearestToday.weather || '';
+    const labelHour = Math.max(0, Math.min(23, Math.round(hoverHr)));
+    document.getElementById('ttTime').textContent = `${labelHour.toString().padStart(2, '0')}:00 ${activeCity.name}`;
 
-    const tipW = 100;
+    document.getElementById('ttMetarTemp').textContent = observedCandidate
+      ? formatTempFromCelsius(observedCandidate.temp, { settle: activeTempUnit() === 'F' })
+      : '--';
+    document.getElementById('ttMetarNote').textContent = observedCandidate
+      ? (observedCandidate.weather || 'observed')
+      : 'no observation near this time';
+
+    document.getElementById('ttForecastTemp').textContent = forecastCandidate
+      ? formatTempFromCelsius(forecastCandidate.temp, { decimals: 1 })
+      : '--';
+    document.getElementById('ttForecastNote').textContent = forecastCandidate
+      ? (forecastCandidate.rain > 0
+        ? `${forecastCandidate.rain.toFixed(1)} mm rain · ${forecastCandidate.sourceLabel}`
+        : forecastCandidate.sourceLabel)
+      : 'no forecast point near this time';
+
+    const tipW = 180;
     let tipX = mouseX + 14;
     let tipY = mouseY - 44;
     if (tipX + tipW > W) tipX = mouseX - tipW - 14;

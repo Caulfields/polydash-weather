@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Polymarket — Weather Dashboard</title>
+  <title>Weather Dashboard</title>
   <link rel="icon" type="image/x-icon" href="/favicon/favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon/favicon-16x16.png">
@@ -12,156 +12,99 @@
   <link rel="stylesheet" href="/assets/css/index.css" />
 </head>
 <body>
-
-<header>
-  <div class="logo">P</div>
-  <div class="city-tabs" id="cityTabs">
-    <button class="city-tab active" id="cityTab-beijing" onclick="switchCity('beijing')">Beijing</button>
-    <button class="city-tab" id="cityTab-london" onclick="switchCity('london')">London</button>
-    <button class="city-tab" id="cityTab-paris" onclick="switchCity('paris')">Paris</button>
-    <button class="city-tab" id="cityTab-nyc" onclick="switchCity('nyc')">New York</button>
-    <button class="city-tab" id="cityTab-dallas" onclick="switchCity('dallas')">Dallas</button>
-  </div>
-  <h1 id="pageTitle" style="flex:1;font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Loading...</h1>
-  <a href="/weth/beijing-forecast.html" class="data-btn" style="text-decoration:none">Beijing Forecast</a>
-  <a href="/weth/forecast.html" class="data-btn" style="text-decoration:none">London forecast</a>
-  <a href="/weth/paris-forecast.html" class="data-btn" style="text-decoration:none">Paris Forecast</a>
-  <a href="/weth/usa-forecast.html" class="data-btn" style="text-decoration:none">USA Forecast</a>
-  <a href="/stats.html" class="data-btn" style="text-decoration:none">Weather price charts</a>
-  <div class="ws-status">
-    <div class="ws-dot connecting" id="wsDot"></div>
-  </div>
-</header>
-
-<div class="main">
-
-  <!-- Left: positions table -->
-  <div class="left-panel">
-    <div class="panel-header">
-      <div class="day-tabs">
-        <button class="day-tab active" id="tabToday" onclick="switchDay(0)">—</button>
-        <button class="day-tab tomorrow-tab" id="tabTomorrow" onclick="switchDay(1)">—</button>
-      </div>
-
-      <select class="sort-select" id="sortSel">
-        <option value="threshold">By temperature</option>
-        <option value="price_desc">Price ↓</option>
-        <option value="price_asc">Price ↑</option>
-      </select>
-      <span class="panel-meta" id="lastUpd">—</span>
+  <header class="app-header">
+    <div class="brand-mark">W</div>
+    <div class="title-block">
+      <h1 id="pageTitle">Beijing Weather</h1>
+      <span id="stationLabel">ZBAA · Beijing Capital International Airport</span>
     </div>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Outcome</th>
-            <th class="r">Yes</th>
-            <th class="r">Last</th>
-          </tr>
-        </thead>
-        <tbody id="mktBody">
-          <tr><td><div class="sk" style="width:70px"></div></td><td></td><td></td></tr>
-          <tr><td><div class="sk" style="width:50px"></div></td><td></td><td></td></tr>
-          <tr><td><div class="sk" style="width:80px"></div></td><td></td><td></td></tr>
-          <tr><td><div class="sk" style="width:60px"></div></td><td></td><td></td></tr>
-          <tr><td><div class="sk" style="width:75px"></div></td><td></td><td></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
+    <div class="header-time" id="londonTime">--:--:--</div>
+  </header>
 
-  <!-- Right: METAR chart -->
-  <div class="right-panel">
-    <div class="chart-header">
-      <span class="temp-now" id="tempNow">—<span class="temp-unit">°C</span></span>
-      <span id="londonTime" style="font-size:13px;font-weight:600;color:var(--dim);flex-shrink:0">—</span>
-      <span class="chart-title" id="chartTitle" style="display:none"></span>
-      <span class="metar-raw" id="metarRaw" style="display:none"></span>
-      <div class="om-switch" id="omSwitch">
-        <button class="om-mode-btn active" id="omModeBest" type="button" onclick="setOmMode('best')">Best</button>
-        <button class="om-mode-btn" id="omModeAvg" type="button" onclick="setOmMode('average')">Average</button>
-      </div>
-    </div>
-    <div class="chart-wrap">
-        <canvas id="tempChart"></canvas>
-        <canvas id="tempChartOverlay"></canvas>
-        <div class="chart-tooltip" id="chartTooltip">
-          <div class="chart-tooltip-time" id="ttTime"></div>
-          <div class="chart-tooltip-temp" id="ttTemp"></div>
-          <div class="chart-tooltip-wx"   id="ttWx"></div>
+  <main class="weather-layout">
+    <section class="weather-panel">
+      <div class="current-strip">
+        <div>
+          <span class="eyebrow">Observed now</span>
+          <div class="temp-now" id="tempNow">--<span class="temp-unit">°C</span></div>
         </div>
-    </div>
-    <div class="legend-wrap" id="chartLegend"></div>
-    <div class="chart-footer">
-      <div class="cf-item">
-        <span class="cf-label">Min today</span>
-        <span class="cf-value" id="cfMin">—</span>
-      </div>
-      <div class="cf-item">
-        <span class="cf-label">Max today</span>
-        <span class="cf-value" id="cfMax" style="color:var(--orange)">—</span>
-      </div>
-      <div class="cf-item">
-        <span class="cf-label">Погода</span>
-        <span class="cf-value" id="cfWeather">—</span>
-      </div>
-      <div class="cf-item">
-        <span class="cf-label">Wind</span>
-        <span class="cf-value" id="cfWind">—</span>
-      </div>
-      <span class="metar-updated" id="metarUpd">—</span>
-    </div>
-
-    <!-- Open-Meteo (UKMO) -->
-    <div class="om-panel" id="omPanel">
-      <div class="om-header">
-        <span class="om-title" id="omTitle">Open-Meteo</span>
-        <span class="om-badge" id="omBadge">UKMO</span>
-      </div>
-      <div class="om-chart-wrap">
-        <canvas id="omChart"></canvas>
-        <div class="om-tooltip" id="omTooltip">
-          <div class="om-tooltip-time" id="omTtTime"></div>
-          <div class="om-tooltip-temp" id="omTtTemp"></div>
-          <div class="om-tooltip-wind" id="omTtWind"></div>
-          <div class="om-tooltip-rain" id="omTtRain"></div>
+        <div class="current-meta">
+          <div>
+            <span class="cf-label">Min today</span>
+            <span class="cf-value" id="cfMin">--</span>
+          </div>
+          <div>
+            <span class="cf-label">Max today</span>
+            <span class="cf-value hot" id="cfMax">--</span>
+          </div>
+          <div>
+            <span class="cf-label">Weather</span>
+            <span class="cf-value" id="cfWeather">--</span>
+          </div>
+          <div>
+            <span class="cf-label">Wind</span>
+            <span class="cf-value" id="cfWind">--</span>
+          </div>
         </div>
+        <span class="metar-updated" id="metarUpd">--</span>
       </div>
-      <div class="om-loading" id="omLoading">Loading...</div>
-    </div>
-  </div>
 
-  <!-- Right: user positions -->
-  <div class="user-panel">
-    <div class="user-panel-header">
-      <div class="user-avatar" id="userAvatar">?</div>
-      <span class="user-name" id="userName">Loading...</span>
-      <span class="user-pnl" id="userPnl">—</span>
-    </div>
-    <div class="user-meta">
-      <div class="user-meta-item">
-        <span class="user-meta-label">Value</span>
-        <span class="user-meta-val" id="userValue">—</span>
+      <div class="chart-section">
+        <div class="section-header">
+          <div>
+            <span class="eyebrow">Observed and forecast</span>
+            <h2 id="chartTitle">ZBAA Temperature Today</h2>
+          </div>
+          <span class="metar-raw" id="metarRaw">loading...</span>
+          <span class="source-badge" id="omBadge">OM</span>
+          <div class="om-switch" id="omSwitch">
+            <button class="om-mode-btn active" id="omModeBest" type="button" onclick="setOmMode('best')">Best</button>
+            <button class="om-mode-btn" id="omModeAvg" type="button" onclick="setOmMode('average')">Average</button>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="tempChart"></canvas>
+          <canvas id="tempChartOverlay"></canvas>
+          <div class="chart-tooltip" id="chartTooltip">
+            <div class="chart-tooltip-time" id="ttTime"></div>
+            <div class="chart-tooltip-row">
+              <span class="tooltip-key metar">METAR</span>
+              <span class="chart-tooltip-temp" id="ttMetarTemp">--</span>
+            </div>
+            <div class="chart-tooltip-note" id="ttMetarNote"></div>
+            <div class="chart-tooltip-row">
+              <span class="tooltip-key forecast">Forecast</span>
+              <span class="chart-tooltip-temp forecast" id="ttForecastTemp">--</span>
+            </div>
+            <div class="chart-tooltip-note" id="ttForecastNote"></div>
+          </div>
+        </div>
+        <div class="legend-wrap" id="chartLegend"></div>
+        <div class="om-loading" id="omLoading">Loading...</div>
+        <div class="model-tools">
+          <button class="rank-button" id="modelRankBtn" type="button" onclick="rankForecastModels()">Find best model</button>
+          <span class="rank-status" id="modelRankStatus"></span>
+        </div>
+        <div class="model-dock" id="modelDock"></div>
       </div>
-      <div class="user-meta-item">
-        <span class="user-meta-label">Positions</span>
-        <span class="user-meta-val" id="userPosCount">—</span>
+    </section>
+
+    <aside class="city-panel" aria-label="City selection">
+      <div class="city-panel-header">
+        <span class="eyebrow">Cities</span>
+        <h2>Switch location</h2>
       </div>
-    </div>
-    <div class="user-positions-scroll" id="userPositions">
-      <div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Loading...</div>
-    </div>
-    <div class="user-updated" id="userUpdated">—</div>
-  </div>
+      <div class="city-search-wrap">
+        <input class="city-search" id="citySearch" type="search" placeholder="Search city or code" autocomplete="off" />
+      </div>
+      <div class="city-list" id="cityList"></div>
+    </aside>
+  </main>
 
-</div>
-
-<script src="/assets/js/dashboard/config.js"></script>
-<script src="/assets/js/dashboard/utils.js"></script>
-<script src="/assets/js/dashboard/markets.js"></script>
-<script src="/assets/js/dashboard/metar-chart.js"></script>
-<script src="/assets/js/dashboard/user-archive.js"></script>
-<script src="/assets/js/dashboard/openmeteo.js"></script>
-<script src="/assets/js/dashboard/city-boot.js"></script>
+  <script src="/assets/js/dashboard/config.js"></script>
+  <script src="/assets/js/dashboard/utils.js"></script>
+  <script src="/assets/js/dashboard/metar-chart.js"></script>
+  <script src="/assets/js/dashboard/openmeteo.js"></script>
+  <script src="/assets/js/dashboard/city-boot.js"></script>
 </body>
 </html>

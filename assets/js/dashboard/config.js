@@ -1,39 +1,125 @@
-const GAMMA_API = '/api/gamma';
-const CLOB_API = '/api/clob';
-const WSS_URL = 'wss://ws-subscriptions-clob.polymarket.com/ws/market';
-const CLOB_REFRESH_MS = 15000;
 const METAR_REFRESH_MS = 120000;
+const OM_REFRESH_MS = 15 * 60 * 1000;
+
+const WEATHER_MODELS = {
+  auto: 'Best match',
+  ecmwf_ifs04: 'ECMWF IFS HRES',
+  ecmwf_ifs025: 'ECMWF IFS 0.25',
+  ecmwf_aifs025_single: 'ECMWF AIFS',
+  cma_grapes_global: 'CMA GRAPES',
+  bom_access_global: 'BOM ACCESS-G',
+  gfs_seamless: 'GFS Seamless',
+  gfs_global: 'GFS Global',
+  gfs_graphcast025: 'GFS GraphCast',
+  jma_seamless: 'JMA Seamless',
+  jma_gsm: 'JMA GSM',
+  kma_seamless: 'KMA Seamless',
+  kma_gdps: 'KMA GDPS',
+  icon_seamless: 'ICON Seamless',
+  icon_global: 'ICON Global',
+  icon_eu: 'ICON EU',
+  icon_d2: 'ICON D2',
+  gem_seamless: 'GEM Seamless',
+  gem_global: 'GEM Global',
+  meteofrance_seamless: 'MF Seamless',
+  meteofrance_arpege_world: 'ARPEGE World',
+  meteofrance_arpege_europe: 'ARPEGE Europe',
+  meteofrance_arome_france: 'AROME France',
+  meteofrance_arome_france_hd: 'AROME France HD',
+  metno_seamless: 'MET Norway',
+  knmi_seamless: 'KNMI Seamless',
+  knmi_harmonie_arome_europe: 'KNMI AROME EU',
+  knmi_harmonie_arome_netherlands: 'KNMI AROME NL',
+  dmi_seamless: 'DMI Seamless',
+  dmi_harmonie_arome_europe: 'DMI AROME EU',
+  ukmo_seamless: 'UKMO Seamless',
+  ukmo_global_deterministic_10km: 'UKMO Global',
+  ukmo_uk_deterministic_2km: 'UKMO UKV',
+  geosphere_seamless: 'GeoSphere',
+  geosphere_arome_austria: 'AROME Austria',
+};
+
+const EUROPE_MODELS = [
+  'auto',
+  'ukmo_seamless',
+  'ukmo_global_deterministic_10km',
+  'ukmo_uk_deterministic_2km',
+  'ecmwf_ifs04',
+  'ecmwf_ifs025',
+  'ecmwf_aifs025_single',
+  'icon_seamless',
+  'icon_global',
+  'icon_eu',
+  'icon_d2',
+  'gfs_seamless',
+  'gfs_global',
+  'gfs_graphcast025',
+  'meteofrance_seamless',
+  'meteofrance_arpege_world',
+  'meteofrance_arpege_europe',
+  'meteofrance_arome_france',
+  'knmi_seamless',
+  'dmi_seamless',
+];
+
+const ASIA_MODELS = [
+  'auto',
+  'cma_grapes_global',
+  'ecmwf_ifs04',
+  'ecmwf_ifs025',
+  'ecmwf_aifs025_single',
+  'gfs_seamless',
+  'gfs_global',
+  'gfs_graphcast025',
+  'jma_seamless',
+  'jma_gsm',
+  'kma_seamless',
+  'kma_gdps',
+  'icon_seamless',
+  'icon_global',
+  'bom_access_global',
+  'gem_global',
+  'gem_seamless',
+  'ukmo_global_deterministic_10km',
+  'meteofrance_arpege_world',
+  'geosphere_seamless',
+];
+
+const US_MODELS = [
+  'auto',
+  'gfs_seamless',
+  'gfs_global',
+  'gfs_graphcast025',
+  'ecmwf_ifs04',
+  'ecmwf_ifs025',
+  'ecmwf_aifs025_single',
+  'gem_seamless',
+  'gem_global',
+  'icon_seamless',
+  'icon_global',
+  'ukmo_global_deterministic_10km',
+  'cma_grapes_global',
+  'bom_access_global',
+  'jma_seamless',
+  'jma_gsm',
+  'kma_seamless',
+  'kma_gdps',
+  'meteofrance_arpege_world',
+  'geosphere_seamless',
+];
 
 const CITIES = {
-  beijing: {
-    id: 'beijing',
-    name: 'Beijing',
-    metar: 'ZBAA',
-    airport: 'Beijing Capital International Airport',
-    timezone: 'Asia/Shanghai',
-    seriesSlug: 'beijing-daily-weather',
-    slugPrefix: 'highest-temperature-in-beijing-on',
-    archiveKey: 'polydash_archive_beijing',
-    coords: { lat: 40.0799, lon: 116.6031 },
-    omKind: 'hourly',
-    omBadge: 'CMA',
-    omSourceLabel: 'Open-Meteo Forecast',
-    omApi: 'https://api.open-meteo.com/v1/forecast?latitude=40.0799&longitude=116.6031&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,precipitation_probability&timezone=Asia%2FShanghai&forecast_days=1',
-  },
   london: {
     id: 'london',
     name: 'London',
     metar: 'EGLC',
     airport: 'London City Airport',
     timezone: 'Europe/London',
-    seriesSlug: 'london-daily-weather',
-    slugPrefix: 'highest-temperature-in-london-on',
-    archiveKey: 'polydash_archive_london',
     coords: { lat: 51.5053, lon: 0.0553 },
     omKind: 'minutely',
     omBadge: 'UKMO',
     omSourceLabel: 'UKMO Seamless',
-    omApi: 'https://api.open-meteo.com/v1/forecast?latitude=51.5053&longitude=0.0553&minutely_15=temperature_2m,precipitation,wind_speed_10m,wind_direction_10m&forecast_days=1&models=ukmo_seamless&timezone=Europe%2FLondon',
+    modelOptions: EUROPE_MODELS,
   },
   paris: {
     id: 'paris',
@@ -41,31 +127,23 @@ const CITIES = {
     metar: 'LFPB',
     airport: 'Paris Le Bourget',
     timezone: 'Europe/Paris',
-    seriesSlug: 'paris-daily-weather',
-    slugPrefix: 'highest-temperature-in-paris-on',
-    archiveKey: 'polydash_archive_paris',
     coords: { lat: 48.949675, lon: 2.432356 },
     omKind: 'hourly',
     omBadge: 'MF',
     omSourceLabel: 'Meteo-France',
-    omApi: 'https://api.open-meteo.com/v1/forecast?latitude=48.949675&longitude=2.432356&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,precipitation_probability&models=meteofrance_seamless&timezone=Europe%2FParis&forecast_days=1',
+    modelOptions: EUROPE_MODELS,
   },
-  nyc: {
-    id: 'nyc',
-    name: 'New York',
-    metar: 'KLGA',
-    airport: 'LaGuardia Airport',
-    timezone: 'America/New_York',
-    seriesSlug: 'nyc-daily-weather',
-    slugPrefix: 'highest-temperature-in-nyc-on',
-    archiveKey: 'polydash_archive_nyc',
-    coords: { lat: 40.774722, lon: -73.871944 },
-    marketUnit: 'F',
-    usesUsMetarTenths: true,
+  beijing: {
+    id: 'beijing',
+    name: 'Beijing',
+    metar: 'ZBAA',
+    airport: 'Beijing Capital International Airport',
+    timezone: 'Asia/Shanghai',
+    coords: { lat: 40.0774, lon: 116.5967 },
     omKind: 'hourly',
-    omBadge: 'NOAA',
-    omSourceLabel: 'GFS / HRRR Seamless',
-    omApi: 'https://api.open-meteo.com/v1/gfs?latitude=40.774722&longitude=-73.871944&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,precipitation_probability&timezone=America%2FNew_York&forecast_days=1',
+    omBadge: 'CMA',
+    omSourceLabel: 'Open-Meteo Forecast',
+    modelOptions: ASIA_MODELS,
   },
   dallas: {
     id: 'dallas',
@@ -73,81 +151,104 @@ const CITIES = {
     metar: 'KDAL',
     airport: 'Dallas Love Field',
     timezone: 'America/Chicago',
-    seriesSlug: 'dallas-daily-weather',
-    slugPrefix: 'highest-temperature-in-dallas-on',
-    archiveKey: 'polydash_archive_dallas',
-    coords: { lat: 32.847222, lon: -96.851667 },
-    marketUnit: 'F',
+    coords: { lat: 32.8459, lon: -96.8509 },
+    tempUnit: 'F',
     usesUsMetarTenths: true,
     omKind: 'hourly',
     omBadge: 'NOAA',
     omSourceLabel: 'GFS / HRRR Seamless',
-    omApi: 'https://api.open-meteo.com/v1/gfs?latitude=32.847222&longitude=-96.851667&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation,precipitation_probability&timezone=America%2FChicago&forecast_days=1',
+    modelOptions: US_MODELS,
   },
+  taipei: cityConfig('taipei', 'Taipei', 'RCSS', 25.0697, 121.5525, 'Asia/Taipei', ASIA_MODELS, 'CWB'),
+  seoul: cityConfig('seoul', 'Seoul', 'RKSI', 37.4602, 126.4407, 'Asia/Seoul', ASIA_MODELS, 'KMA'),
+  hongkong: cityConfig('hongkong', 'Hong Kong', 'VHHH', 22.308, 113.9185, 'Asia/Hong_Kong', ASIA_MODELS, 'HKO'),
+  singapore: cityConfig('singapore', 'Singapore', 'WSSS', 1.3644, 103.9915, 'Asia/Singapore', ASIA_MODELS, 'MSS'),
+  milan: cityConfig('milan', 'Milan', 'LIMC', 45.6306, 8.7281, 'Europe/Rome', EUROPE_MODELS, 'EU'),
+  madrid: cityConfig('madrid', 'Madrid', 'LEMD', 40.4983, -3.5676, 'Europe/Madrid', EUROPE_MODELS, 'AEMET'),
+  shanghai: cityConfig('shanghai', 'Shanghai', 'ZSPD', 31.1434, 121.8052, 'Asia/Shanghai', ASIA_MODELS, 'CMA'),
+  miami: usCityConfig('miami', 'Miami', 'KMIA', 25.7959, -80.287, 'America/New_York'),
+  ankara: cityConfig('ankara', 'Ankara', 'LTAC', 40.1281, 32.9951, 'Europe/Istanbul', EUROPE_MODELS, 'EU'),
+  saopaulo: cityConfig('saopaulo', 'Sao Paulo', 'SBGR', -23.4356, -46.4731, 'America/Sao_Paulo', US_MODELS, 'GFS'),
+  chongqing: cityConfig('chongqing', 'Chongqing', 'ZUCK', 29.7192, 106.6417, 'Asia/Shanghai', ASIA_MODELS, 'CMA'),
+  chengdu: cityConfig('chengdu', 'Chengdu', 'ZUUU', 30.5785, 103.9471, 'Asia/Shanghai', ASIA_MODELS, 'CMA'),
+  nyc: {
+    id: 'nyc',
+    name: 'New York',
+    metar: 'KLGA',
+    airport: 'LaGuardia Airport',
+    timezone: 'America/New_York',
+    coords: { lat: 40.774722, lon: -73.871944 },
+    tempUnit: 'F',
+    usesUsMetarTenths: true,
+    omKind: 'hourly',
+    omBadge: 'NOAA',
+    omSourceLabel: 'GFS / HRRR Seamless',
+    modelOptions: US_MODELS,
+  },
+  warsaw: cityConfig('warsaw', 'Warsaw', 'EPWA', 52.1657, 20.9671, 'Europe/Warsaw', EUROPE_MODELS, 'EU'),
+  jakarta: cityConfig('jakarta', 'Jakarta', 'WIHH', -6.2666, 106.8911, 'Asia/Jakarta', ASIA_MODELS, 'BMKG'),
+  munich: cityConfig('munich', 'Munich', 'EDDM', 48.3538, 11.7861, 'Europe/Berlin', EUROPE_MODELS, 'DWD'),
+  atlanta: usCityConfig('atlanta', 'Atlanta', 'KATL', 33.6367, -84.4281, 'America/New_York'),
+  amsterdam: cityConfig('amsterdam', 'Amsterdam', 'EHAM', 52.3105, 4.7683, 'Europe/Amsterdam', EUROPE_MODELS, 'KNMI'),
+  moscow: cityConfig('moscow', 'Moscow', 'UUWW', 55.5915, 37.2615, 'Europe/Moscow', EUROPE_MODELS, 'EU'),
+  toronto: cityConfig('toronto', 'Toronto', 'CYYZ', 43.6777, -79.6248, 'America/Toronto', US_MODELS, 'GFS'),
+  istanbul: cityConfig('istanbul', 'Istanbul', 'LTFM', 41.2753, 28.7519, 'Europe/Istanbul', EUROPE_MODELS, 'EU'),
+  kualalumpur: cityConfig('kualalumpur', 'Kuala Lumpur', 'WMKK', 2.7456, 101.7072, 'Asia/Kuala_Lumpur', ASIA_MODELS, 'MSS'),
+  wuhan: cityConfig('wuhan', 'Wuhan', 'ZHHH', 30.7838, 114.2081, 'Asia/Shanghai', ASIA_MODELS, 'CMA'),
+  lagos: cityConfig('lagos', 'Lagos', 'DNMM', 6.5774, 3.3212, 'Africa/Lagos', EUROPE_MODELS, 'GFS'),
+  losangeles: usCityConfig('losangeles', 'Los Angeles', 'KLAX', 33.9416, -118.4085, 'America/Los_Angeles'),
+  guangzhou: cityConfig('guangzhou', 'Guangzhou', 'ZGGG', 23.3924, 113.2988, 'Asia/Shanghai', ASIA_MODELS, 'CMA'),
+  lucknow: cityConfig('lucknow', 'Lucknow', 'VILK', 26.7606, 80.8893, 'Asia/Kolkata', ASIA_MODELS, 'GFS'),
+  buenosaires: cityConfig('buenosaires', 'Buenos Aires', 'SAEZ', -34.8222, -58.5358, 'America/Argentina/Buenos_Aires', US_MODELS, 'GFS'),
+  busan: cityConfig('busan', 'Busan', 'RKPK', 35.1795, 128.9382, 'Asia/Seoul', ASIA_MODELS, 'KMA'),
+  capetown: cityConfig('capetown', 'Cape Town', 'FACT', -33.9648, 18.6017, 'Africa/Johannesburg', EUROPE_MODELS, 'GFS'),
+  telaviv: cityConfig('telaviv', 'Tel Aviv', 'LLBG', 32.0114, 34.8867, 'Asia/Jerusalem', EUROPE_MODELS, 'EU'),
+  manila: cityConfig('manila', 'Manila', 'RPLL', 14.5086, 121.0198, 'Asia/Manila', ASIA_MODELS, 'GFS'),
+  qingdao: cityConfig('qingdao', 'Qingdao', 'ZSQD', 36.3619, 120.0885, 'Asia/Shanghai', ASIA_MODELS, 'CMA'),
+  sanfrancisco: usCityConfig('sanfrancisco', 'San Francisco', 'KSFO', 37.6213, -122.379, 'America/Los_Angeles'),
+  denver: usCityConfig('denver', 'Denver', 'KBKF', 39.7017, -104.7517, 'America/Denver'),
+  mexicocity: cityConfig('mexicocity', 'Mexico City', 'MMMX', 19.4363, -99.0721, 'America/Mexico_City', US_MODELS, 'GFS'),
+  seattle: usCityConfig('seattle', 'Seattle', 'KSEA', 47.4502, -122.3088, 'America/Los_Angeles'),
+  wellington: cityConfig('wellington', 'Wellington', 'NZWN', -41.3268, 174.8069, 'Pacific/Auckland', ASIA_MODELS, 'GFS'),
+  austin: usCityConfig('austin', 'Austin', 'KAUS', 30.1945, -97.6699, 'America/Chicago'),
+  shenzhen: cityConfig('shenzhen', 'Shenzhen', 'ZGSZ', 22.6395, 113.8033, 'Asia/Shanghai', ASIA_MODELS, 'CMA'),
+  chicago: usCityConfig('chicago', 'Chicago', 'KORD', 41.9769, -87.9081, 'America/Chicago'),
+  helsinki: cityConfig('helsinki', 'Helsinki', 'EFHK', 60.3184, 24.9633, 'Europe/Helsinki', EUROPE_MODELS, 'EU'),
+  jeddah: cityConfig('jeddah', 'Jeddah', 'OEJN', 21.6802, 39.1574, 'Asia/Riyadh', ASIA_MODELS, 'GFS'),
+  houston: usCityConfig('houston', 'Houston', 'KHOU', 29.6458, -95.2772, 'America/Chicago'),
+  karachi: cityConfig('karachi', 'Karachi', 'OPKC', 24.9065, 67.1608, 'Asia/Karachi', ASIA_MODELS, 'GFS'),
+  panamacity: cityConfig('panamacity', 'Panama City', 'MPMG', 8.9733, -79.5556, 'America/Panama', US_MODELS, 'GFS'),
 };
 
-let activeCity = CITIES.beijing;
-
-function cityDateParts(offsetDays = 0) {
-  const now = new Date(Date.now() + offsetDays * 86400000);
-  const fmt = new Intl.DateTimeFormat('en-GB', {
-    timeZone: activeCity.timezone,
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-  const parts = Object.fromEntries(fmt.formatToParts(now).map((part) => [part.type, part.value]));
+function cityConfig(id, name, metar, lat, lon, timezone, modelOptions, badge) {
   return {
-    day: parseInt(parts.day, 10),
-    month: parts.month.toLowerCase(),
-    year: parseInt(parts.year, 10),
+    id,
+    name,
+    metar,
+    airport: `${name} airport (${metar})`,
+    timezone,
+    coords: { lat, lon },
+    omKind: 'hourly',
+    omBadge: badge || 'OM',
+    omSourceLabel: 'Open-Meteo Forecast',
+    modelOptions,
   };
 }
 
-function dateSlug(offsetDays) {
-  const parts = cityDateParts(offsetDays);
-  return `${activeCity.slugPrefix}-${parts.month}-${parts.day}-${parts.year}`;
+function usCityConfig(id, name, metar, lat, lon, timezone) {
+  return {
+    ...cityConfig(id, name, metar, lat, lon, timezone, US_MODELS, 'NOAA'),
+    tempUnit: 'F',
+    usesUsMetarTenths: true,
+    omSourceLabel: 'GFS / HRRR Seamless',
+  };
 }
 
-function londonDateLabel(offsetDays) {
-  const parts = cityDateParts(offsetDays);
-  const month = parts.month.charAt(0).toUpperCase() + parts.month.slice(1, 3);
-  return `${parts.day} ${month}`;
-}
-
-let currentDay = cityDateParts(0).day;
-let viewDay = 0;
-
-const makeDayState = () => ({
-  markets: [],
-  prices: {},
-  prevPrices: {},
-  loaded: false,
-  clobTimer: null,
-});
-
-let dayState = [makeDayState(), makeDayState()];
-
-let ws = null;
-let wsRetryDelay = 2000;
-
-const getMarkets = () => dayState[viewDay].markets;
-const getPrices = () => dayState[viewDay].prices;
-const getPrevPrices = () => dayState[viewDay].prevPrices;
-
+let activeCity = CITIES.beijing;
+let activeForecastModel = 'auto';
 let metarToday = [];
-let metarYesterday = [];
 let metarObsTime = null;
-
 let chartState = null;
-
-const THRESH_TEMPS = [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
-
-let USER_ADDRESS = '';
-const USER_REFRESH = 30000;
-let userUpdatedTs = null;
-
-const OM_REFRESH = 15 * 60 * 1000;
 let omData = null;
 let omMode = 'best';
 let hourlyOmState = null;

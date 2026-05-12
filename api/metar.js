@@ -1,12 +1,9 @@
-// METAR proxy with per-station in-memory cache (resets on cold start).
-const metarCache = {};
-const stationCoords = {
-  ZBAA: { lat: 40.0799, lon: 116.6031 },
-  EGLC: { lat: 51.5053, lon: 0.0553 },
-  LFPB: { lat: 48.949675, lon: 2.432356 },
-  LFPG: { lat: 48.949675, lon: 2.432356 },
-  EGLL: { lat: 51.4700, lon: -0.4543 },
-};
+// METAR proxy with short in-memory cache and in-flight request reuse.
+const { STATIONS, normalizeStation } = require('../data/weather-stations');
+
+const METAR_TTL_MS = 90_000;
+const metarCache = new Map();
+const metarInflight = new Map();
 
 function isSafeOrigin(req) {
   const origin = req.headers.origin || '';
@@ -15,13 +12,13 @@ function isSafeOrigin(req) {
 }
 
 async function fetchOpenMeteo(station, hours) {
-  const coords = stationCoords[station];
+  const coords = STATIONS[station];
   if (!coords) throw new Error('No coordinates for station');
 
   const now = Math.floor(Date.now() / 1000);
   const startTime = now - (hours * 3600);
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&hourly=temperature_2m&start=${startTime}&end=${now}&timezone=auto`;
-  const upstream = await fetch(url, { headers: { 'User-Agent': 'polydash/1.0' } });
+  const upstream = await fetch(url, { headers: { 'User-Agent': 'weather-dashboard/1.0' } });
   if (!upstream.ok) throw new Error('Open-Meteo HTTP ' + upstream.status);
   const json = await upstream.json();
   if (!json.hourly) throw new Error('Open-Meteo missing hourly data');
@@ -30,6 +27,15 @@ async function fetchOpenMeteo(station, hours) {
     temp: Math.round(Number(temp) * 10) / 10,
     rawOb: `${temp}C`,
   }));
+}
+
+async function fetchMetar(station, hours) {
+  const url = `https://aviationweather.gov/api/data/metar?ids=${station}&format=json&taf=false&hours=${hours}`;
+  const upstream = await fetch(url, { headers: { 'User-Agent': 'weather-dashboard/1.0' } });
+  if (!upstream.ok) throw new Error('HTTP ' + upstream.status);
+  const json = await upstream.json();
+  if (!Array.isArray(json) && !json.data) throw new Error('Invalid response');
+  return json;
 }
 
 module.exports = async function handler(req, res) {
@@ -41,9 +47,8 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.setHeader('Vary', 'Origin');
 
-  const raw     = (req.query.station || 'EGLC') + '';
-  const station = raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
-  if (!/^[A-Z0-9]{3,4}$/.test(station)) {
+  const station = normalizeStation(req.query.station);
+  if (!/^[A-Z0-9]{3,4}$/.test(station) || !STATIONS[station]) {
     res.status(400).end(JSON.stringify({ error: 'Invalid station code' }));
     return;
   }
@@ -52,33 +57,35 @@ module.exports = async function handler(req, res) {
   const hours    = Math.min(Math.max(hoursRaw, 1), 168);
   const cacheKey = `${station}_${hours}`;
 
-  const cache = metarCache[cacheKey] || { data: null, ts: 0 };
-  if (cache.data && Date.now() - cache.ts < 60_000) {
+  const cache = metarCache.get(cacheKey) || { data: null, ts: 0 };
+  if (cache.data && Date.now() - cache.ts < METAR_TTL_MS) {
     res.setHeader('Content-Type', 'application/json');
+    res.setHeader('X-Cache', 'HIT');
     res.end(JSON.stringify(cache.data));
     return;
   }
 
-  const url = `https://aviationweather.gov/api/data/metar?ids=${station}&format=json&taf=false&hours=${hours}`;
-
   try {
-    const upstream = await fetch(url, { headers: { 'User-Agent': 'polydash/1.0' } });
-    if (!upstream.ok) throw new Error('HTTP ' + upstream.status);
-    const json = await upstream.json();
-    if (!Array.isArray(json) && !json.data) throw new Error('Invalid response');
-    metarCache[cacheKey] = { data: json, ts: Date.now() };
+    if (!metarInflight.has(cacheKey)) {
+      metarInflight.set(cacheKey, fetchMetar(station, hours).finally(() => metarInflight.delete(cacheKey)));
+    }
+    const json = await metarInflight.get(cacheKey);
+    metarCache.set(cacheKey, { data: json, ts: Date.now() });
     res.setHeader('Content-Type', 'application/json');
+    res.setHeader('X-Cache', 'MISS');
     res.end(JSON.stringify(json));
   } catch (e) {
     console.error('[metar]', e.message);
     try {
       const fallback = await fetchOpenMeteo(station, hours);
-      metarCache[cacheKey] = { data: fallback, ts: Date.now() };
+      metarCache.set(cacheKey, { data: fallback, ts: Date.now() });
       res.setHeader('Content-Type', 'application/json');
+      res.setHeader('X-Cache', 'FALLBACK');
       res.end(JSON.stringify(fallback));
     } catch (fallbackError) {
       if (cache.data) {
         res.setHeader('Content-Type', 'application/json');
+        res.setHeader('X-Cache', 'STALE');
         res.end(JSON.stringify(cache.data));
         return;
       }
