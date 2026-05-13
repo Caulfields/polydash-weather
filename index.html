@@ -92,6 +92,12 @@
       <div class="city-search-wrap">
         <input class="city-search" id="citySearch" type="search" placeholder="Search city or code" autocomplete="off" />
       </div>
+      <div class="city-filter-bar">
+        <button class="city-filter-btn" id="cityFavoritesFilter" type="button" aria-pressed="false" onclick="toggleFavoriteCityFilter()">
+          <span class="favorite-icon" aria-hidden="true">☆</span>
+          Favorites
+        </button>
+      </div>
       <div class="city-list" id="cityList"></div>
     </aside>
   </main>

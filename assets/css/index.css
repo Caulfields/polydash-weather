@@ -460,6 +460,8 @@ canvas#tempChartOverlay {
 .city-panel {
   min-width: 0;
   height: 100vh;
+  display: flex;
+  flex-direction: column;
   border-top: 0;
   border-right: 0;
   border-bottom: 0;
@@ -496,30 +498,75 @@ canvas#tempChartOverlay {
   border-color: rgba(249, 115, 22, 0.65);
 }
 
+.city-filter-bar {
+  flex-shrink: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.city-filter-btn {
+  width: 100%;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface2);
+  color: var(--dim);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.city-filter-btn:hover,
+.city-filter-btn.active {
+  border-color: rgba(249, 115, 22, 0.65);
+  color: var(--text);
+}
+
+.favorite-icon {
+  color: var(--orange);
+  font-size: 14px;
+  line-height: 1;
+}
+
 .city-list {
+  min-height: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 12px;
   overflow-y: auto;
-  height: calc(100% - 111px);
   scrollbar-gutter: stable;
 }
 
-.city-button {
+.city-card {
   --city-region: var(--orange);
   width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: stretch;
   border: 1px solid color-mix(in srgb, var(--city-region) 38%, var(--border));
   border-left: 4px solid var(--city-region);
   border-radius: 8px;
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--city-region) 13%, transparent), transparent 46%),
     var(--surface2);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.city-button {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
   cursor: pointer;
   padding: 12px 12px 12px 10px;
   text-align: left;
-  transition: border-color 0.15s, background 0.15s;
 }
 
 .city-region-usa {
@@ -538,11 +585,11 @@ canvas#tempChartOverlay {
   --city-region: #f59e0b;
 }
 
-.city-button:hover {
+.city-card:hover {
   border-color: color-mix(in srgb, var(--city-region) 74%, var(--border));
 }
 
-.city-button.active {
+.city-card.active {
   border-color: var(--city-region);
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--city-region) 23%, transparent), transparent 62%),
@@ -573,12 +620,31 @@ canvas#tempChartOverlay {
 }
 
 .city-airport {
+  display: block;
   margin-top: 4px;
   overflow: hidden;
   color: var(--dim);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.city-favorite-btn {
+  width: 34px;
+  min-height: 100%;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--city-region) 30%, var(--border));
+  border-radius: 0 7px 7px 0;
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--dim);
+  cursor: pointer;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.city-favorite-btn:hover,
+.city-favorite-btn.active {
+  color: var(--orange);
 }
 
 .city-empty {
@@ -612,13 +678,12 @@ canvas#tempChartOverlay {
   }
 
   .city-list {
-    height: calc(100% - 111px);
     flex-direction: column;
     overflow-y: auto;
     overflow-x: hidden;
   }
 
-  .city-button {
+  .city-card {
     min-width: 0;
   }
 

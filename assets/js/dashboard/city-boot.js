@@ -1,9 +1,26 @@
+const FAVORITE_CITIES_STORAGE_KEY = 'polydash.favoriteCityIds';
 let citySearchQuery = '';
+let favoriteCityIds = loadFavoriteCityIds();
+let showFavoriteCitiesOnly = false;
 let rankedModelIds = [];
 let modelScoresById = {};
 let averagedModelsById = {};
 let rankedCityId = null;
 let rankingRunId = 0;
+
+function loadFavoriteCityIds() {
+  try {
+    const raw = localStorage.getItem(FAVORITE_CITIES_STORAGE_KEY);
+    const ids = JSON.parse(raw || '[]');
+    return new Set(Array.isArray(ids) ? ids.filter((id) => CITIES[id]) : []);
+  } catch (error) {
+    return new Set();
+  }
+}
+
+function saveFavoriteCityIds() {
+  localStorage.setItem(FAVORITE_CITIES_STORAGE_KEY, JSON.stringify([...favoriteCityIds]));
+}
 
 function cityRegionClass(city) {
   if (city.metar?.startsWith('K')) return ' city-region-usa';
@@ -23,6 +40,7 @@ function renderCityList() {
   const cityList = document.getElementById('cityList');
   const query = citySearchQuery.trim().toLowerCase();
   const cities = Object.values(CITIES).filter((city) => {
+    if (showFavoriteCitiesOnly && !favoriteCityIds.has(city.id)) return false;
     if (!query) return true;
     return [
       city.name,
@@ -33,14 +51,25 @@ function renderCityList() {
   }).sort((a, b) => cityRegionRank(a) - cityRegionRank(b));
 
   cityList.innerHTML = cities.length ? cities.map((city) => `
-    <button class="city-button${cityRegionClass(city)}${city.id === activeCity.id ? ' active' : ''}" id="cityTab-${city.id}" type="button" onclick="switchCity('${city.id}')">
-      <span class="city-name-row">
-        <span class="city-name">${city.name}</span>
-        <span class="city-station">${city.metar}</span>
-      </span>
-      <span class="city-airport">${city.airport}</span>
-    </button>
-  `).join('') : '<div class="city-empty">No matching cities</div>';
+    <div class="city-card${cityRegionClass(city)}${city.id === activeCity.id ? ' active' : ''}" id="cityTab-${city.id}">
+      <button class="city-button" type="button" onclick="switchCity('${city.id}')">
+        <span class="city-name-row">
+          <span class="city-name">${city.name}</span>
+          <span class="city-station">${city.metar}</span>
+        </span>
+        <span class="city-airport">${city.airport}</span>
+      </button>
+      <button class="city-favorite-btn${favoriteCityIds.has(city.id) ? ' active' : ''}" type="button" title="${favoriteCityIds.has(city.id) ? 'Remove from favorites' : 'Add to favorites'}" aria-label="${favoriteCityIds.has(city.id) ? 'Remove ' : 'Add '}${city.name} ${favoriteCityIds.has(city.id) ? 'from' : 'to'} favorites" aria-pressed="${favoriteCityIds.has(city.id)}" onclick="toggleFavoriteCity('${city.id}')">
+        ${favoriteCityIds.has(city.id) ? '★' : '☆'}
+      </button>
+    </div>
+  `).join('') : `<div class="city-empty">${showFavoriteCitiesOnly ? 'No favorite cities match' : 'No matching cities'}</div>`;
+
+  const filterButton = document.getElementById('cityFavoritesFilter');
+  if (filterButton) {
+    filterButton.classList.toggle('active', showFavoriteCitiesOnly);
+    filterButton.setAttribute('aria-pressed', `${showFavoriteCitiesOnly}`);
+  }
 }
 
 function cityModelOptions() {
@@ -91,7 +120,7 @@ function setCityChrome() {
   document.getElementById('omLoading').style.display = '';
   document.getElementById('omLoading').textContent = 'Loading...';
 
-  document.querySelectorAll('.city-button').forEach((button) => {
+  document.querySelectorAll('.city-card').forEach((button) => {
     button.classList.toggle('active', button.id === `cityTab-${activeCity.id}`);
   });
   renderModelDock();
@@ -111,6 +140,22 @@ function setupCitySearch() {
     citySearchQuery = input.value;
     renderCityList();
   });
+}
+
+function toggleFavoriteCity(cityId) {
+  if (!CITIES[cityId]) return;
+  if (favoriteCityIds.has(cityId)) {
+    favoriteCityIds.delete(cityId);
+  } else {
+    favoriteCityIds.add(cityId);
+  }
+  saveFavoriteCityIds();
+  renderCityList();
+}
+
+function toggleFavoriteCityFilter() {
+  showFavoriteCitiesOnly = !showFavoriteCitiesOnly;
+  renderCityList();
 }
 
 function resetModelRanking() {
