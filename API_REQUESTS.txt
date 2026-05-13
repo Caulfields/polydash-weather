@@ -203,11 +203,11 @@ Single-City Query Parameters
 city
   Required unless station is enough to resolve the location.
   City name or city id.
-  Examples: London, london, Amsterdam, amsterdam, Tokyo, tokyo
+  Examples: London, london, Amsterdam, amsterdam, Beijing, beijing
 
 station
   Optional fallback or override METAR station code.
-  Examples: EGLC, EHAM, RJTT
+  Examples: EGLC, EHAM, ZBAA
 
 date
   Required. Local forecast date in YYYY-MM-DD format.
@@ -225,7 +225,7 @@ Local development:
 Production:
 
   curl "https://YOUR_DOMAIN/api/bot/weather?city=London&date=2026-05-13"
-  curl "https://YOUR_DOMAIN/api/bot/weather?city=Tokyo&station=RJTT&date=2026-05-13"
+  curl "https://YOUR_DOMAIN/api/bot/weather?city=Beijing&station=ZBAA&date=2026-05-13"
 
 
 Batch Request
@@ -237,27 +237,27 @@ Request by city names:
 
 {
   "date": "2026-05-13",
-  "cities": ["London", "Amsterdam", "Tokyo"]
+  "cities": ["London", "Amsterdam", "Beijing"]
 }
 
 Request by city ids:
 
 {
   "date": "2026-05-13",
-  "city_ids": ["london", "amsterdam", "tokyo"]
+  "city_ids": ["london", "amsterdam", "beijing"]
 }
 
 Local development:
 
   curl -X POST "http://localhost:3000/api/bot/weather/batch" \
     -H "Content-Type: application/json" \
-    -d "{\"date\":\"2026-05-13\",\"cities\":[\"London\",\"Amsterdam\",\"Tokyo\"]}"
+    -d "{\"date\":\"2026-05-13\",\"cities\":[\"London\",\"Amsterdam\",\"Beijing\"]}"
 
 Production:
 
   curl -X POST "https://YOUR_DOMAIN/api/bot/weather/batch" \
     -H "Content-Type: application/json" \
-    -d "{\"date\":\"2026-05-13\",\"city_ids\":[\"london\",\"amsterdam\",\"tokyo\"]}"
+    -d "{\"date\":\"2026-05-13\",\"city_ids\":[\"london\",\"amsterdam\",\"beijing\"]}"
 
 
 Bot Weather Response
