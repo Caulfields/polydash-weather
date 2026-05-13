@@ -202,7 +202,7 @@ Single-City Query Parameters
 
 city
   Required unless station is enough to resolve the location.
-  City name or city id.
+  City name or city id for any city configured on the site.
   Examples: London, london, Amsterdam, amsterdam, Beijing, beijing
 
 station
@@ -212,6 +212,14 @@ station
 date
   Required. Local forecast date in YYYY-MM-DD format.
   Example: 2026-05-13
+
+
+Supported Site Cities
+---------------------
+
+The bot weather API uses the same city list as the site. The examples above are
+not exhaustive. Any city shown in the site city selector can be requested by its
+city name, city id, or METAR station code.
 
 
 Single-City Examples
