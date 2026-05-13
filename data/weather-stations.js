@@ -4,6 +4,7 @@ const STATIONS = {
   ZBAA: { lat: 40.0774, lon: 116.5967, timezone: 'Asia/Shanghai' },
   KDAL: { lat: 32.8459, lon: -96.8509, timezone: 'America/Chicago' },
   RCSS: { lat: 25.0697, lon: 121.5525, timezone: 'Asia/Taipei' },
+  RJTT: { lat: 35.5523, lon: 139.7798, timezone: 'Asia/Tokyo' },
   RKSI: { lat: 37.4602, lon: 126.4407, timezone: 'Asia/Seoul' },
   VHHH: { lat: 22.308, lon: 113.9185, timezone: 'Asia/Hong_Kong' },
   WSSS: { lat: 1.3644, lon: 103.9915, timezone: 'Asia/Singapore' },

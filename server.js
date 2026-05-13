@@ -5,11 +5,13 @@ const https = require('https');
 const path = require('path');
 const { STATIONS, normalizeStation } = require('./data/weather-stations');
 const { resolveCity, rankTemperature } = require('./lib/weather-ranking');
+const { buildSingleWeatherResponse, buildBatchWeatherResponse } = require('./lib/bot-weather');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname)));
+app.use(express.json({ limit: '64kb' }));
 
 const METAR_TTL_MS = 90_000;
 const FORECAST_TTL_MS = 10 * 60_000;
@@ -209,6 +211,30 @@ app.get('/api/temperature', async (req, res) => {
     res.json(await rankTemperature(city, { unit }));
   } catch (error) {
     res.status(502).json({ error: error.message });
+  }
+});
+
+app.get('/api/bot/weather', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+
+  try {
+    res.json(await buildSingleWeatherResponse({
+      city: req.query.city,
+      station: req.query.station,
+      date: req.query.date,
+    }));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/bot/weather/batch', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+
+  try {
+    res.json(await buildBatchWeatherResponse(req.body || {}));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 

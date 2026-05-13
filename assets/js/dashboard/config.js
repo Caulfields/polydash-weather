@@ -160,6 +160,7 @@ const CITIES = {
     modelOptions: US_MODELS,
   },
   taipei: cityConfig('taipei', 'Taipei', 'RCSS', 25.0697, 121.5525, 'Asia/Taipei', ASIA_MODELS, 'CWB'),
+  tokyo: cityConfig('tokyo', 'Tokyo', 'RJTT', 35.5523, 139.7798, 'Asia/Tokyo', ASIA_MODELS, 'JMA'),
   seoul: cityConfig('seoul', 'Seoul', 'RKSI', 37.4602, 126.4407, 'Asia/Seoul', ASIA_MODELS, 'KMA'),
   hongkong: cityConfig('hongkong', 'Hong Kong', 'VHHH', 22.308, 113.9185, 'Asia/Hong_Kong', ASIA_MODELS, 'HKO'),
   singapore: cityConfig('singapore', 'Singapore', 'WSSS', 1.3644, 103.9915, 'Asia/Singapore', ASIA_MODELS, 'MSS'),

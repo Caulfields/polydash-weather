@@ -4,9 +4,11 @@
     { "src": "index.html", "use": "@vercel/static" },
     { "src": "assets/**", "use": "@vercel/static" },
     { "src": "favicon/**", "use": "@vercel/static" },
-    { "src": "api/*.js", "use": "@vercel/node" }
+    { "src": "api/**/*.js", "use": "@vercel/node" }
   ],
   "routes": [
+    { "src": "/api/bot/weather/batch", "dest": "api/bot/weather/batch.js" },
+    { "src": "/api/bot/weather", "dest": "api/bot/weather.js" },
     { "src": "/api/metar", "dest": "api/metar.js" },
     { "src": "/api/forecast", "dest": "api/forecast.js" },
     { "src": "/api/temperature", "dest": "api/temperature.js" },

@@ -12,6 +12,8 @@ the best averaged model combination.
 
 This endpoint is private. Requests must include your secret API key.
 
+API_SECRET
+
 
 Query Parameters
 ----------------
@@ -174,3 +176,197 @@ Recommended setup for a private bot:
   - Configure the bot to send X-API-Key with every request.
   - Reject API requests when the header is missing or incorrect.
   - Keep the GitHub repository public only if it contains no secrets.
+
+
+Bot Weather API
+===============
+
+Endpoints
+---------
+
+GET /api/bot/weather
+
+Use this endpoint from a bot to get current observations, a selected forecast,
+and model accuracy data for one city.
+
+POST /api/bot/weather/batch
+
+Use this endpoint to request the same bot-friendly weather response for multiple
+cities in one call.
+
+These endpoints do not require API_SECRET.
+
+
+Single-City Query Parameters
+----------------------------
+
+city
+  Required unless station is enough to resolve the location.
+  City name or city id.
+  Examples: London, london, Amsterdam, amsterdam, Tokyo, tokyo
+
+station
+  Optional fallback or override METAR station code.
+  Examples: EGLC, EHAM, RJTT
+
+date
+  Required. Local forecast date in YYYY-MM-DD format.
+  Example: 2026-05-13
+
+
+Single-City Examples
+--------------------
+
+Local development:
+
+  curl "http://localhost:3000/api/bot/weather?city=London&date=2026-05-13"
+  curl "http://localhost:3000/api/bot/weather?city=London&station=EGLC&date=2026-05-13"
+
+Production:
+
+  curl "https://YOUR_DOMAIN/api/bot/weather?city=London&date=2026-05-13"
+  curl "https://YOUR_DOMAIN/api/bot/weather?city=Tokyo&station=RJTT&date=2026-05-13"
+
+
+Batch Request
+-------------
+
+POST /api/bot/weather/batch
+
+Request by city names:
+
+{
+  "date": "2026-05-13",
+  "cities": ["London", "Amsterdam", "Tokyo"]
+}
+
+Request by city ids:
+
+{
+  "date": "2026-05-13",
+  "city_ids": ["london", "amsterdam", "tokyo"]
+}
+
+Local development:
+
+  curl -X POST "http://localhost:3000/api/bot/weather/batch" \
+    -H "Content-Type: application/json" \
+    -d "{\"date\":\"2026-05-13\",\"cities\":[\"London\",\"Amsterdam\",\"Tokyo\"]}"
+
+Production:
+
+  curl -X POST "https://YOUR_DOMAIN/api/bot/weather/batch" \
+    -H "Content-Type: application/json" \
+    -d "{\"date\":\"2026-05-13\",\"city_ids\":[\"london\",\"amsterdam\",\"tokyo\"]}"
+
+
+Bot Weather Response
+--------------------
+
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-05-13T09:20:00.000Z",
+  "items": [
+    {
+      "city": {
+        "id": "london",
+        "name": "London",
+        "station": "EGLC",
+        "timezone": "Europe/London"
+      },
+      "date": "2026-05-13",
+      "unit": "C",
+      "observations": {
+        "source": "aviationweather",
+        "used_fallback": false,
+        "latest_time": "2026-05-13T09:30:00+01:00",
+        "latest_temp_c": 10.0,
+        "current_high_c": 10.0,
+        "current_high_time": "2026-05-13T09:30:00+01:00",
+        "latest_age_minutes": 8,
+        "raw": "EGLC 130930Z ..."
+      },
+      "forecast": {
+        "source": "open-meteo",
+        "model_id": "avg_ecmwf_ifs025__icon_seamless",
+        "model_type": "average",
+        "model_ids": ["ecmwf_ifs025", "icon_seamless"],
+        "day_max_c": 14.0,
+        "day_max_time": "2026-05-13T14:00:00+01:00",
+        "forecast_30min": [
+          {
+            "time": "2026-05-13T10:00:00+01:00",
+            "temp_c": 10.6
+          }
+        ],
+        "next_30m_max_c": 10.6,
+        "next_60m_max_c": 11.1,
+        "next_90m_max_c": 11.5,
+        "next_120m_max_c": 12.0
+      },
+      "best_model": {
+        "id": "avg_ecmwf_ifs025__icon_seamless",
+        "name": "avg_ecmwf_ifs025__icon_seamless",
+        "type": "average",
+        "model_ids": ["ecmwf_ifs025", "icon_seamless"],
+        "accuracy": {
+          "mae_c": 0.61,
+          "rmse_c": 0.73,
+          "matches": 24,
+          "score": 0.942
+        }
+      },
+      "data_quality": {
+        "status": "ok",
+        "warnings": []
+      }
+    }
+  ],
+  "errors": []
+}
+
+
+Model Selection
+---------------
+
+For each city, the bot endpoint:
+
+1. Gets same-date METAR observations from AviationWeather.
+2. Searches forecast model candidates from Open-Meteo.
+3. Scores the best single model against observations.
+4. Scores averaged model combinations.
+5. Selects whichever has the lower score.
+6. Returns forecast data from the selected single model or averaged model set.
+
+Lower mae_c, rmse_c, and score values are better.
+
+
+Bot Fields To Use
+-----------------
+
+observations.latest_temp_c
+  Latest observed temperature in Celsius.
+
+observations.current_high_c
+  Highest observed temperature so far on the requested local date.
+
+forecast.day_max_c
+  Forecast maximum temperature for the requested local date.
+
+forecast.forecast_30min
+  Next five 30-minute forecast points. Half-hour points are interpolated between
+  Open-Meteo hourly values.
+
+forecast.next_30m_max_c, forecast.next_60m_max_c, forecast.next_90m_max_c,
+forecast.next_120m_max_c
+  Rolling maximum temperatures from the returned 30-minute forecast points.
+
+best_model.type
+  "single" when one model won, or "average" when an averaged model combination
+  won.
+
+data_quality.status
+  "ok" or "warning". Check data_quality.warnings before using the item.
+
+errors
+  Batch-only per-item failures. Successful city results still appear in items.
