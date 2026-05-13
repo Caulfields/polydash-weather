@@ -1,6 +1,10 @@
 const FAVORITE_CITIES_STORAGE_KEY = 'polydash.favoriteCityIds';
+const CITY_NOTES_STORAGE_KEY = 'polydash.cityNotes';
+const CITY_NOTES_OPEN_STORAGE_KEY = 'polydash.cityNotesOpen';
 let citySearchQuery = '';
 let favoriteCityIds = loadFavoriteCityIds();
+let cityNotesById = loadCityNotes();
+let locationNotesOpen = loadLocationNotesOpen();
 let showFavoriteCitiesOnly = false;
 let rankedModelIds = [];
 let modelScoresById = {};
@@ -20,6 +24,31 @@ function loadFavoriteCityIds() {
 
 function saveFavoriteCityIds() {
   localStorage.setItem(FAVORITE_CITIES_STORAGE_KEY, JSON.stringify([...favoriteCityIds]));
+}
+
+function loadCityNotes() {
+  try {
+    const raw = localStorage.getItem(CITY_NOTES_STORAGE_KEY);
+    const notes = JSON.parse(raw || '{}');
+    if (!notes || typeof notes !== 'object' || Array.isArray(notes)) return {};
+    return Object.fromEntries(
+      Object.entries(notes).filter(([id, value]) => CITIES[id] && typeof value === 'string')
+    );
+  } catch (error) {
+    return {};
+  }
+}
+
+function saveCityNotes() {
+  localStorage.setItem(CITY_NOTES_STORAGE_KEY, JSON.stringify(cityNotesById));
+}
+
+function loadLocationNotesOpen() {
+  return localStorage.getItem(CITY_NOTES_OPEN_STORAGE_KEY) !== 'false';
+}
+
+function saveLocationNotesOpen() {
+  localStorage.setItem(CITY_NOTES_OPEN_STORAGE_KEY, `${locationNotesOpen}`);
 }
 
 function cityRegionClass(city) {
@@ -124,6 +153,7 @@ function setCityChrome() {
     button.classList.toggle('active', button.id === `cityTab-${activeCity.id}`);
   });
   renderModelDock();
+  renderLocationNotes();
 
   const overlay = document.getElementById('tempChartOverlay');
   if (overlay) {
@@ -156,6 +186,42 @@ function toggleFavoriteCity(cityId) {
 function toggleFavoriteCityFilter() {
   showFavoriteCitiesOnly = !showFavoriteCitiesOnly;
   renderCityList();
+}
+
+function updateCityNote(cityId, value) {
+  if (!CITIES[cityId]) return;
+  const note = `${value || ''}`;
+  if (note.trim()) {
+    cityNotesById[cityId] = note;
+  } else {
+    delete cityNotesById[cityId];
+  }
+  saveCityNotes();
+}
+
+function updateActiveCityNote(value) {
+  updateCityNote(activeCity.id, value);
+}
+
+function renderLocationNotes() {
+  const notesPanel = document.getElementById('locationNotes');
+  const notesTitle = document.getElementById('locationNotesTitle');
+  const notesInput = document.getElementById('locationNotesInput');
+  const toggle = document.getElementById('locationNotesToggle');
+  const toggleText = document.getElementById('locationNotesToggleText');
+  if (!notesPanel || !notesTitle || !notesInput || !toggle || !toggleText) return;
+
+  notesTitle.textContent = `${activeCity.name} notes`;
+  notesInput.value = cityNotesById[activeCity.id] || '';
+  notesPanel.classList.toggle('collapsed', !locationNotesOpen);
+  toggle.setAttribute('aria-expanded', `${locationNotesOpen}`);
+  toggleText.textContent = locationNotesOpen ? 'Hide' : 'Open';
+}
+
+function toggleLocationNotes() {
+  locationNotesOpen = !locationNotesOpen;
+  saveLocationNotesOpen();
+  renderLocationNotes();
 }
 
 function resetModelRanking() {

@@ -457,6 +457,73 @@ canvas#tempChartOverlay {
   font-weight: 900;
 }
 
+.location-notes {
+  width: min(100%, 980px);
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.location-notes-toggle {
+  width: 100%;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  padding: 9px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.location-notes-toggle:hover {
+  background: var(--surface2);
+}
+
+.location-notes-toggle-text {
+  flex-shrink: 0;
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.location-notes-body {
+  padding: 0 16px 14px;
+}
+
+.location-notes.collapsed .location-notes-body {
+  display: none;
+}
+
+.location-notes-input {
+  width: 100%;
+  min-height: 86px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface2);
+  color: var(--text);
+  outline: none;
+  padding: 9px 10px;
+  font: inherit;
+  line-height: 1.4;
+}
+
+.location-notes-input::placeholder {
+  color: var(--muted);
+}
+
+.location-notes-input:focus {
+  border-color: rgba(249, 115, 22, 0.65);
+}
+
 .city-panel {
   min-width: 0;
   height: 100vh;

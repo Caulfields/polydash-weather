@@ -82,6 +82,16 @@
         </div>
         <div class="model-dock" id="modelDock"></div>
       </div>
+
+      <div class="location-notes" id="locationNotes">
+        <button class="location-notes-toggle" id="locationNotesToggle" type="button" aria-expanded="true" onclick="toggleLocationNotes()">
+          <span id="locationNotesTitle">Location notes</span>
+          <span class="location-notes-toggle-text" id="locationNotesToggleText">Hide</span>
+        </button>
+        <div class="location-notes-body" id="locationNotesBody">
+          <textarea class="location-notes-input" id="locationNotesInput" rows="4" placeholder="Add notes for this location" oninput="updateActiveCityNote(this.value)"></textarea>
+        </div>
+      </div>
     </section>
 
     <aside class="city-panel" aria-label="City selection">
