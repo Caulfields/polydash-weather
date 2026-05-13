@@ -378,6 +378,28 @@ canvas#tempChartOverlay {
   background: rgba(96, 165, 250, 0.18);
 }
 
+.rank-button.daytime {
+  border-color: rgba(249, 115, 22, 0.58);
+  background: rgba(249, 115, 22, 0.12);
+  color: #fed7aa;
+}
+
+.rank-button.daytime:hover:not(:disabled) {
+  border-color: rgba(249, 115, 22, 0.85);
+  background: rgba(249, 115, 22, 0.18);
+}
+
+.rank-button.daytime.combo {
+  border-color: rgba(245, 158, 11, 0.58);
+  background: rgba(245, 158, 11, 0.12);
+  color: #fde68a;
+}
+
+.rank-button.daytime.combo:hover:not(:disabled) {
+  border-color: rgba(245, 158, 11, 0.85);
+  background: rgba(245, 158, 11, 0.18);
+}
+
 .rank-button:disabled {
   cursor: wait;
   opacity: 0.65;

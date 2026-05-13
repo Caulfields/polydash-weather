@@ -231,17 +231,25 @@ function resetModelRanking() {
   rankedCityId = null;
   const button = document.getElementById('modelRankBtn');
   const comboButton = document.getElementById('modelComboRankBtn');
+  const dayButton = document.getElementById('modelRankDayBtn');
+  const dayComboButton = document.getElementById('modelComboRankDayBtn');
   const status = document.getElementById('modelRankStatus');
   if (button) button.disabled = false;
   if (comboButton) comboButton.disabled = false;
+  if (dayButton) dayButton.disabled = false;
+  if (dayComboButton) dayComboButton.disabled = false;
   if (status) status.textContent = '';
 }
 
 function setRankingButtonsDisabled(disabled) {
   const button = document.getElementById('modelRankBtn');
   const comboButton = document.getElementById('modelComboRankBtn');
+  const dayButton = document.getElementById('modelRankDayBtn');
+  const dayComboButton = document.getElementById('modelComboRankDayBtn');
   if (button) button.disabled = disabled;
   if (comboButton) comboButton.disabled = disabled;
+  if (dayButton) dayButton.disabled = disabled;
+  if (dayComboButton) dayComboButton.disabled = disabled;
 }
 
 function forecastUrlForModel(modelId) {
@@ -294,6 +302,37 @@ function scoreForecastRows(forecastRows) {
   };
 }
 
+function scoreForecastRowsFromHour(forecastRows, startHour) {
+  const observedByHour = nearestObservedByHour(metarToday);
+  const errors = [];
+  const windErrors = [];
+
+  forecastRows.forEach((row) => {
+    const hour = Math.round(row.hourFrac);
+    if (hour < startHour) return;
+    const observed = observedByHour.get(hour)?.row;
+    if (!observed || Math.abs(row.hourFrac - hour) > 0.35) return;
+    errors.push(Math.abs(row.temp - observed.temp));
+    if (typeof row.windSpeed === 'number' && typeof observed.wspd === 'number') {
+      windErrors.push(Math.abs(row.windSpeed - observed.wspd * 1.852));
+    }
+  });
+
+  if (errors.length < 3) return null;
+  const mae = errors.reduce((sum, value) => sum + value, 0) / errors.length;
+  const rmse = Math.sqrt(errors.reduce((sum, value) => sum + value ** 2, 0) / errors.length);
+  const windMae = windErrors.length
+    ? windErrors.reduce((sum, value) => sum + value, 0) / windErrors.length
+    : 0;
+  return {
+    mae,
+    rmse,
+    windMae,
+    matches: errors.length,
+    score: mae + rmse * 0.25 + windMae * 0.04,
+  };
+}
+
 async function fetchModelScore(modelId, runCityId) {
   const res = await fetch(forecastUrlForModel(modelId), { cache: 'no-store' });
   if (!res.ok) throw new Error(`${WEATHER_MODELS[modelId] || modelId}: HTTP ${res.status}`);
@@ -301,6 +340,16 @@ async function fetchModelScore(modelId, runCityId) {
   if (runCityId !== activeCity.id) return null;
   const rows = parseHourlyRows(data.hourly || {}, cityTodayKey(activeCity.timezone), modelId);
   const score = scoreForecastRows(rows);
+  return score ? { id: modelId, ...score } : null;
+}
+
+async function fetchModelScoreFromHour(modelId, runCityId, startHour) {
+  const res = await fetch(forecastUrlForModel(modelId), { cache: 'no-store' });
+  if (!res.ok) throw new Error(`${WEATHER_MODELS[modelId] || modelId}: HTTP ${res.status}`);
+  const data = await res.json();
+  if (runCityId !== activeCity.id) return null;
+  const rows = parseHourlyRows(data.hourly || {}, cityTodayKey(activeCity.timezone), modelId);
+  const score = scoreForecastRowsFromHour(rows, startHour);
   return score ? { id: modelId, ...score } : null;
 }
 
@@ -538,6 +587,176 @@ async function rankForecastModelAverages() {
     activeForecastModel = bestSingle.id;
     if (status) {
       status.textContent = `No average improved on ${WEATHER_MODELS[bestSingle.id] || bestSingle.id}`;
+    }
+    hourlyOmState = null;
+    omData = null;
+    renderModelDock();
+    fetchOpenMeteo().catch(console.error);
+  }
+
+  setRankingButtonsDisabled(false);
+}
+
+async function rankForecastModelsFromFive() {
+  const startHour = 5;
+  const runId = ++rankingRunId;
+  const runCityId = activeCity.id;
+  const status = document.getElementById('modelRankStatus');
+  const baseOptions = activeCity.modelOptions?.length ? activeCity.modelOptions : US_MODELS.slice(0, 10);
+  const candidates = baseOptions.slice(0, baseOptions.length >= 20 ? 20 : 10);
+
+  setRankingButtonsDisabled(true);
+  if (status) status.textContent = 'Loading observations from 05:00...';
+
+  if (metarToday.length < 3) await loadMetar();
+  if (runId !== rankingRunId || runCityId !== activeCity.id) return;
+  if (metarToday.filter((item) => Math.round(toHourFrac(item.time)) >= startHour).length < 3) {
+    if (status) status.textContent = 'Need more observations from 05:00';
+    setRankingButtonsDisabled(false);
+    return;
+  }
+
+  const results = [];
+  for (let index = 0; index < candidates.length; index += 4) {
+    if (runId !== rankingRunId || runCityId !== activeCity.id) return;
+    const batch = candidates.slice(index, index + 4);
+    if (status) status.textContent = `Testing from 05:00 ${Math.min(index + batch.length, candidates.length)}/${candidates.length} models...`;
+    const settled = await Promise.allSettled(batch.map((id) => fetchModelScoreFromHour(id, runCityId, startHour)));
+    settled.forEach((item) => {
+      if (item.status === 'fulfilled' && item.value) results.push(item.value);
+    });
+  }
+
+  if (runId !== rankingRunId || runCityId !== activeCity.id) return;
+  results.sort((a, b) => a.score - b.score);
+  const top = results.slice(0, 5);
+  rankedModelIds = top.map((item) => item.id);
+  modelScoresById = Object.fromEntries(top.map((item) => [item.id, item]));
+  rankedCityId = activeCity.id;
+
+  if (top.length) {
+    activeForecastModel = top[0].id;
+    if (status) {
+      status.textContent = `Best from 05:00: ${WEATHER_MODELS[top[0].id] || top[0].id} / MAE ${top[0].mae.toFixed(1)}${tempUnitLabel()}`;
+    }
+    hourlyOmState = null;
+    omData = null;
+    renderModelDock();
+    fetchOpenMeteo().catch(console.error);
+  } else if (status) {
+    status.textContent = 'No comparable models from 05:00';
+  }
+
+  setRankingButtonsDisabled(false);
+}
+
+async function rankForecastModelAveragesFromFive() {
+  const startHour = 5;
+  const runId = ++rankingRunId;
+  const runCityId = activeCity.id;
+  const status = document.getElementById('modelRankStatus');
+  const baseOptions = activeCity.modelOptions?.length ? activeCity.modelOptions : US_MODELS.slice(0, 10);
+  const candidates = baseOptions.slice(0, baseOptions.length >= 20 ? 20 : 10);
+
+  rankedModelIds = [];
+  modelScoresById = {};
+  averagedModelsById = {};
+  rankedCityId = null;
+  renderModelDock();
+
+  setRankingButtonsDisabled(true);
+  if (status) status.textContent = 'Reloading observations from 05:00...';
+
+  metarToday = [];
+  await loadMetar();
+  if (runId !== rankingRunId || runCityId !== activeCity.id) return;
+  if (metarToday.filter((item) => Math.round(toHourFrac(item.time)) >= startHour).length < 3) {
+    if (status) status.textContent = 'Need more observations from 05:00';
+    setRankingButtonsDisabled(false);
+    return;
+  }
+
+  const modelRows = [];
+  for (let index = 0; index < candidates.length; index += 4) {
+    if (runId !== rankingRunId || runCityId !== activeCity.id) return;
+    const batch = candidates.slice(index, index + 4);
+    if (status) status.textContent = `Loading from 05:00 ${Math.min(index + batch.length, candidates.length)}/${candidates.length} models...`;
+    const settled = await Promise.allSettled(batch.map((id) => fetchModelRows(id, runCityId)));
+    settled.forEach((item) => {
+      if (item.status === 'fulfilled' && item.value) modelRows.push(item.value);
+    });
+  }
+
+  const singles = modelRows
+    .map((item) => {
+      const score = scoreForecastRowsFromHour(item.rows, startHour);
+      return score ? { id: item.id, rows: item.rows, ...score } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.score - b.score);
+
+  if (!singles.length) {
+    if (status) status.textContent = 'No comparable models from 05:00';
+    setRankingButtonsDisabled(false);
+    return;
+  }
+
+  const comboPool = singles;
+  let bestCombo = null;
+  let tested = 0;
+  const total = [2, 3, 4].reduce((sum, size) => sum + combinations(comboPool, size).length, 0);
+
+  for (const size of [2, 3, 4]) {
+    const combos = combinations(comboPool, size);
+    for (const combo of combos) {
+      if (runId !== rankingRunId || runCityId !== activeCity.id) return;
+      tested += 1;
+      if (status && (tested === 1 || tested % 25 === 0 || tested === total)) {
+        status.textContent = `Testing averages from 05:00 ${tested}/${total}...`;
+      }
+      const rows = averageForecastRows(combo);
+      const score = scoreForecastRowsFromHour(rows, startHour);
+      if (!score) continue;
+      const result = {
+        id: averagedModelId(combo.map((item) => item.id)),
+        modelIds: combo.map((item) => item.id),
+        rows,
+        ...score,
+      };
+      if (!bestCombo || result.score < bestCombo.score) bestCombo = result;
+    }
+  }
+
+  if (runId !== rankingRunId || runCityId !== activeCity.id) return;
+  const bestSingle = singles[0];
+  rankedCityId = activeCity.id;
+  rankedModelIds = singles.slice(0, 5).map((item) => item.id);
+  modelScoresById = Object.fromEntries(singles.slice(0, 5).map((item) => [item.id, item]));
+
+  if (bestCombo && bestCombo.score < bestSingle.score) {
+    averagedModelsById[bestCombo.id] = {
+      id: bestCombo.id,
+      modelIds: bestCombo.modelIds,
+      label: averagedModelLabel(bestCombo.modelIds),
+      rows: bestCombo.rows,
+    };
+    modelScoresById[bestCombo.id] = bestCombo;
+    activeForecastModel = bestCombo.id;
+    hourlyOmState = {
+      dateKey: cityTodayKey(activeCity.timezone),
+      rows: bestCombo.rows,
+      sourceLabel: 'Avg',
+    };
+    omData = null;
+    if (status) {
+      status.textContent = `Best average from 05:00: ${bestCombo.modelIds.length} models / MAE ${bestCombo.mae.toFixed(1)}${tempUnitLabel()}`;
+    }
+    renderModelDock();
+    drawChart();
+  } else {
+    activeForecastModel = bestSingle.id;
+    if (status) {
+      status.textContent = `No 05:00 average improved on ${WEATHER_MODELS[bestSingle.id] || bestSingle.id}`;
     }
     hourlyOmState = null;
     omData = null;
