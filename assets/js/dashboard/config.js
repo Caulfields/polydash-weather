@@ -252,6 +252,7 @@ let chartState = null;
 let omData = null;
 let omMode = 'best';
 let hourlyOmState = null;
+let temperatureHighlight = null;
 
 if (typeof module !== 'undefined') {
   module.exports = {

@@ -61,12 +61,182 @@ function observedTempOptions() {
   return activeCity.usesUsMetarTenths ? { decimals: 1 } : { settle: activeTempUnit() === 'F' };
 }
 
+function celsiusFromDisplayTemp(value, unit) {
+  return unit === 'F' ? ((value - 32) * 5) / 9 : value;
+}
+
+function parseTemperatureHighlightInput(value) {
+  const text = `${value || ''}`.trim().replace(',', '.');
+  if (!text) return null;
+  const match = text.match(/^(-?\d+(?:\.\d+)?)\s*(?:\u00B0?\s*)?([cf\u0441])?$/i);
+  if (!match) return { error: 'Enter a number, for example 12C' };
+
+  const target = Number(match[1]);
+  if (!Number.isFinite(target)) return { error: 'Enter a valid temperature' };
+  const unit = (match[2] || activeTempUnit()).toUpperCase().replace('\u0421', 'C');
+  const lowerC = celsiusFromDisplayTemp(target - 0.5, unit);
+  const upperC = celsiusFromDisplayTemp(target + 0.5, unit);
+
+  return {
+    target,
+    unit,
+    lowerC: Math.min(lowerC, upperC),
+    upperC: Math.max(lowerC, upperC),
+  };
+}
+
+function formatHourFrac(hourFrac) {
+  const bounded = Math.max(0, Math.min(24, hourFrac));
+  const totalMinutes = Math.round(bounded * 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+}
+
+function temperatureHighlightPeriods(rows, lowerC, upperC) {
+  if (!rows.length) return [];
+  if (rows.length === 1) {
+    const row = rows[0];
+    return row.temp >= lowerC && row.temp <= upperC
+      ? [{ start: row.hourFrac, end: row.hourFrac }]
+      : [];
+  }
+
+  const periods = [];
+  rows.slice(0, -1).forEach((row, index) => {
+    const next = rows[index + 1];
+    const startHour = row.hourFrac;
+    const endHour = next.hourFrac;
+    const span = endHour - startHour;
+    if (span <= 0) return;
+
+    const startTemp = row.temp;
+    const endTemp = next.temp;
+    const slope = endTemp - startTemp;
+    let startT = 0;
+    let endT = 1;
+
+    if (slope === 0) {
+      if (startTemp < lowerC || startTemp > upperC) return;
+    } else {
+      const tA = (lowerC - startTemp) / slope;
+      const tB = (upperC - startTemp) / slope;
+      startT = Math.max(0, Math.min(tA, tB));
+      endT = Math.min(1, Math.max(tA, tB));
+      if (endT < 0 || startT > 1 || startT > endT) return;
+    }
+
+    const start = startHour + span * startT;
+    const end = startHour + span * endT;
+    if (periods.length && Math.abs(periods[periods.length - 1].end - start) < 0.01) {
+      periods[periods.length - 1].end = end;
+    } else {
+      periods.push({ start, end });
+    }
+  });
+
+  return periods;
+}
+
+function rowDisplayTemp(row) {
+  return tempFromCelsius(row.temp, { decimals: 1 });
+}
+
+function drawForecastSegment(ctx, rows, xOfHr, yOf, fromHour, toHour) {
+  if (toHour <= fromHour) return;
+
+  ctx.beginPath();
+  let started = false;
+  rows.slice(0, -1).forEach((row, index) => {
+    const next = rows[index + 1];
+    const start = Math.max(fromHour, row.hourFrac);
+    const end = Math.min(toHour, next.hourFrac);
+    if (end < start) return;
+
+    const span = next.hourFrac - row.hourFrac;
+    if (span <= 0) return;
+    const tempAt = (hour) => row.temp + ((hour - row.hourFrac) / span) * (next.temp - row.temp);
+    const points = [
+      { hour: start, temp: tempAt(start) },
+      { hour: end, temp: tempAt(end) },
+    ];
+
+    points.forEach((point) => {
+      const x = xOfHr(point.hour);
+      const y = yOf(tempFromCelsius(point.temp, { decimals: null }));
+      if (!started) {
+        ctx.moveTo(x, y);
+        started = true;
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+  });
+
+  if (started) ctx.stroke();
+}
+
+function updateTemperatureHighlightStatus(forecastRows = getForecastRows()) {
+  const status = document.getElementById('targetTempStatus');
+  if (!status) return;
+  status.classList.remove('match', 'no-match', 'error');
+  if (!temperatureHighlight) {
+    status.textContent = '';
+    return;
+  }
+  if (temperatureHighlight.error) {
+    status.classList.add('error');
+    status.textContent = temperatureHighlight.error;
+    return;
+  }
+  if (!forecastRows.length) {
+    status.classList.add('no-match');
+    status.textContent = 'No forecast data for the selected model';
+    return;
+  }
+
+  const periods = temperatureHighlightPeriods(forecastRows, temperatureHighlight.lowerC, temperatureHighlight.upperC);
+  const targetLabel = `${temperatureHighlight.target}${temperatureHighlight.unit}`;
+  if (!periods.length) {
+    const minTemp = Math.min(...forecastRows.map((row) => row.temp));
+    const maxTemp = Math.max(...forecastRows.map((row) => row.temp));
+    status.classList.add('no-match');
+    status.textContent = `${targetLabel}: no periods from ${formatTempFromCelsius(temperatureHighlight.lowerC, { decimals: 1 })} to ${formatTempFromCelsius(temperatureHighlight.upperC, { decimals: 1 })}`;
+    status.title = `Selected model range today: ${formatTempFromCelsius(minTemp, { decimals: 1 })} to ${formatTempFromCelsius(maxTemp, { decimals: 1 })}`;
+    return;
+  }
+  status.classList.add('match');
+  status.title = '';
+  status.textContent = `${targetLabel}: ${periods.map((period) => `${formatHourFrac(period.start)}-${formatHourFrac(period.end)}`).join(', ')}`;
+}
+
+function setTemperatureHighlight(value) {
+  temperatureHighlight = parseTemperatureHighlightInput(value);
+  updateTemperatureHighlightStatus();
+  drawChart();
+}
+
+function clearTemperatureHighlight() {
+  temperatureHighlight = null;
+  const input = document.getElementById('targetTempInput');
+  if (input) input.value = '';
+  updateTemperatureHighlightStatus();
+  drawChart();
+}
+
 async function loadMetar() {
   const requestCityId = activeCity.id;
   try {
     const res = await fetch(`/api/metar?station=${activeCity.metar}`, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const raw = await res.json();
+    const payload = await res.json();
+    const raw = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload?.value)
+      ? payload.value
+      : [];
     if (requestCityId !== activeCity.id) return;
 
     const obs = raw
@@ -247,7 +417,7 @@ function drawChart() {
   const xOfHr = (hour) => pad.left + (hour / 24) * chartWidth;
 
   const displayToday = observedToday.map((item) => tempFromCelsius(item.temp, observedTempOptions()));
-  const displayForecast = forecastRows.map((item) => tempFromCelsius(item.temp, { decimals: 1 }));
+  const displayForecast = forecastRows.map(rowDisplayTemp);
   const allTemps = [...displayToday, ...displayForecast].filter((value) => value != null);
   const rawMin = Math.min(...allTemps);
   const rawMax = Math.max(...allTemps);
@@ -284,6 +454,50 @@ function drawChart() {
     ctx.lineTo(x, pad.top + chartHeight);
     ctx.stroke();
   }
+
+  if (temperatureHighlight && !temperatureHighlight.error && forecastRows.length) {
+    const periods = temperatureHighlightPeriods(forecastRows, temperatureHighlight.lowerC, temperatureHighlight.upperC);
+
+    periods.forEach((period) => {
+      const x = xOfHr(period.start);
+      const w = Math.max(2, xOfHr(period.end) - x);
+      ctx.fillStyle = 'rgba(245,158,11,0.36)';
+      ctx.fillRect(x, pad.top, w, chartHeight);
+
+      ctx.fillStyle = 'rgba(245,158,11,0.92)';
+      ctx.fillRect(x, pad.top + chartHeight - 9, w, 9);
+
+      ctx.save();
+      ctx.strokeStyle = 'rgba(245,158,11,0.92)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x, pad.top);
+      ctx.lineTo(x, pad.top + chartHeight);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x + w, pad.top);
+      ctx.lineTo(x + w, pad.top + chartHeight);
+      ctx.stroke();
+      ctx.restore();
+
+      if (w >= 38) {
+        ctx.fillStyle = '#0d0f14';
+        ctx.font = 'bold 10px Inter,system-ui,sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${formatHourFrac(period.start)}-${formatHourFrac(period.end)}`, x + w / 2, pad.top + chartHeight - 13);
+      }
+    });
+
+    if (periods.length) {
+      const labelX = Math.min(pad.left + chartWidth - 54, xOfHr(periods[0].start) + 4);
+      ctx.fillStyle = '#fde68a';
+      ctx.font = 'bold 10px Inter,system-ui,sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${temperatureHighlight.target}${temperatureHighlight.unit}`, labelX, pad.top + 11);
+    }
+  }
+
+  updateTemperatureHighlightStatus(forecastRows);
 
   const nowX = xOfHr(nowHour);
   if (nowX >= pad.left && nowX <= pad.left + chartWidth) {
@@ -343,6 +557,17 @@ function drawChart() {
         ctx.lineWidth = 1;
         ctx.stroke();
       });
+
+      if (temperatureHighlight && !temperatureHighlight.error) {
+        const periods = temperatureHighlightPeriods(forecastRows, temperatureHighlight.lowerC, temperatureHighlight.upperC);
+        ctx.save();
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        periods.forEach((period) => drawForecastSegment(ctx, forecastRows, xOfHr, yOf, period.start, period.end));
+        ctx.restore();
+      }
     }
   }
 

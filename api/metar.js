@@ -29,13 +29,19 @@ async function fetchOpenMeteo(station, hours) {
   }));
 }
 
+function normalizeMetarResponse(json) {
+  if (Array.isArray(json)) return json;
+  if (Array.isArray(json?.data)) return json.data;
+  if (Array.isArray(json?.value)) return json.value;
+  throw new Error('Invalid METAR response');
+}
+
 async function fetchMetar(station, hours) {
   const url = `https://aviationweather.gov/api/data/metar?ids=${station}&format=json&taf=false&hours=${hours}`;
   const upstream = await fetch(url, { headers: { 'User-Agent': 'weather-dashboard/1.0' } });
   if (!upstream.ok) throw new Error('HTTP ' + upstream.status);
   const json = await upstream.json();
-  if (!Array.isArray(json) && !json.data) throw new Error('Invalid response');
-  return json;
+  return normalizeMetarResponse(json);
 }
 
 module.exports = async function handler(req, res) {

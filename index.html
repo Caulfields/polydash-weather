@@ -82,6 +82,12 @@
           <button class="rank-button daytime combo" id="modelComboRankDayBtn" type="button" onclick="rankForecastModelAveragesFromFive()">Best average from 05</button>
           <span class="rank-status" id="modelRankStatus"></span>
         </div>
+        <div class="temperature-finder">
+          <label class="temperature-finder-label" for="targetTempInput">Target temperature</label>
+          <input class="temperature-finder-input" id="targetTempInput" type="text" inputmode="decimal" placeholder="12C" autocomplete="off" oninput="setTemperatureHighlight(this.value)" />
+          <button class="temperature-finder-clear" id="targetTempClear" type="button" onclick="clearTemperatureHighlight()">Clear</button>
+          <span class="temperature-finder-status" id="targetTempStatus"></span>
+        </div>
         <div class="model-dock" id="modelDock"></div>
       </div>
 
@@ -116,7 +122,7 @@
 
   <script src="/assets/js/dashboard/config.js"></script>
   <script src="/assets/js/dashboard/utils.js"></script>
-  <script src="/assets/js/dashboard/metar-chart.js"></script>
+  <script src="/assets/js/dashboard/metar-chart.js?v=temp-time-2"></script>
   <script src="/assets/js/dashboard/openmeteo.js"></script>
   <script src="/assets/js/dashboard/city-boot.js"></script>
 </body>

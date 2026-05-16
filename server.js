@@ -40,6 +40,13 @@ function fetchJson(url) {
   });
 }
 
+function normalizeMetarResponse(json) {
+  if (Array.isArray(json)) return json;
+  if (Array.isArray(json?.data)) return json.data;
+  if (Array.isArray(json?.value)) return json.value;
+  throw new Error('Invalid METAR response');
+}
+
 function fetchOpenMeteoFallback(station, hours) {
   const coords = STATIONS[station];
   if (!coords) return Promise.reject(new Error('No coordinates for station'));
@@ -78,8 +85,7 @@ function hasValidApiKey(req) {
 async function fetchMetarData(station, hours) {
   const url = `https://aviationweather.gov/api/data/metar?ids=${station}&format=json&taf=false&hours=${hours}`;
   const json = await fetchJson(url);
-  if (!Array.isArray(json) && !json.data) throw new Error('Invalid response');
-  return json;
+  return normalizeMetarResponse(json);
 }
 
 async function fetchForecastData(station, model) {
