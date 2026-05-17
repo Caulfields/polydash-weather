@@ -1,4 +1,5 @@
 const METAR_REFRESH_MS = 120000;
+const METAR_CACHE_TTL_MS = 90000;
 const OM_REFRESH_MS = 15 * 60 * 1000;
 
 const WEATHER_MODELS = {
@@ -246,8 +247,11 @@ function usCityConfig(id, name, metar, lat, lon, timezone) {
 
 let activeCity = CITIES.beijing;
 let activeForecastModel = 'auto';
+let activeForecastDay = 'today';
 let metarToday = [];
 let metarObsTime = null;
+let metarCacheByStation = {};
+let metarInflightByStation = {};
 let chartState = null;
 let omData = null;
 let omMode = 'best';

@@ -311,6 +311,38 @@ canvas#tempChartOverlay {
   font-weight: 800;
 }
 
+.forecast-day-switch {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(29, 36, 48, 0.84);
+}
+
+.forecast-day-btn {
+  min-width: 72px;
+  height: 26px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.forecast-day-btn:hover {
+  color: var(--text);
+}
+
+.forecast-day-btn.active {
+  background: rgba(96, 165, 250, 0.18);
+  color: #dbeafe;
+}
+
 .om-switch {
   display: none;
   gap: 6px;
@@ -488,6 +520,17 @@ canvas#tempChartOverlay {
   background: rgba(96, 165, 250, 0.18);
 }
 
+.rank-button.save-average {
+  border-color: rgba(245, 158, 11, 0.58);
+  background: rgba(245, 158, 11, 0.12);
+  color: #fde68a;
+}
+
+.rank-button.save-average:hover:not(:disabled) {
+  border-color: rgba(245, 158, 11, 0.85);
+  background: rgba(245, 158, 11, 0.18);
+}
+
 .rank-button.daytime {
   border-color: rgba(249, 115, 22, 0.58);
   background: rgba(249, 115, 22, 0.12);
@@ -557,6 +600,43 @@ canvas#tempChartOverlay {
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.model-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.model-chip.saved .model-button {
+  border-color: rgba(245, 158, 11, 0.62);
+  border-radius: 999px 0 0 999px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #fde68a;
+}
+
+.model-chip.saved .model-button.active {
+  border-color: rgba(245, 158, 11, 0.95);
+  background: rgba(245, 158, 11, 0.22);
+  color: #fff7cc;
+}
+
+.model-delete-button {
+  width: 24px;
+  border: 1px solid rgba(245, 158, 11, 0.62);
+  border-left: 0;
+  border-radius: 0 999px 999px 0;
+  background: rgba(245, 158, 11, 0.08);
+  color: #fde68a;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.model-delete-button:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fecaca;
 }
 
 .model-button:hover {

@@ -363,9 +363,13 @@ forecast.day_max_c
 
 forecast.forecast_30min
   30-minute forecast points from now until one hour after the forecast day peak.
-  That means the response includes the peak point plus two more half-hour
-  snapshots after the peak. Half-hour points are interpolated between Open-Meteo
-  hourly values.
+  "Now" is evaluated in the requested city's local timezone, not in the server
+  timezone. For example, London uses Europe/London, Jakarta uses Asia/Jakarta,
+  and Cape Town uses Africa/Johannesburg. Returned timestamps include the local
+  UTC offset for that city.
+
+  The response includes the peak point plus two more half-hour snapshots after
+  the peak. Half-hour points are interpolated between Open-Meteo hourly values.
 
 forecast.next_30m_max_c, forecast.next_60m_max_c, forecast.next_90m_max_c,
 forecast.next_120m_max_c

@@ -73,6 +73,11 @@ function normalizeModel(value) {
   return /^[a-z0-9_]+$/.test(model) ? model : '';
 }
 
+function normalizeDate(value) {
+  const date = `${value || ''}`.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '';
+}
+
 function hasValidApiKey(req) {
   const secret = process.env.API_SECRET;
   if (!secret) return false;
@@ -88,15 +93,20 @@ async function fetchMetarData(station, hours) {
   return normalizeMetarResponse(json);
 }
 
-async function fetchForecastData(station, model) {
+async function fetchForecastData(station, model, date) {
   const location = STATIONS[station];
   const params = new URLSearchParams({
     latitude: location.lat,
     longitude: location.lon,
     hourly: 'temperature_2m,precipitation,precipitation_probability,wind_speed_10m,wind_direction_10m',
-    forecast_days: '1',
     timezone: location.timezone,
   });
+  if (date) {
+    params.set('start_date', date);
+    params.set('end_date', date);
+  } else {
+    params.set('forecast_days', '2');
+  }
   if (model !== 'auto') params.set('models', model);
 
   const json = await fetchJson(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
@@ -152,6 +162,7 @@ app.get('/api/forecast', async (req, res) => {
 
   const station = normalizeStation(req.query.station);
   const model = normalizeModel(req.query.model);
+  const date = normalizeDate(req.query.date);
   if (!STATIONS[station]) {
     res.status(400).json({ error: 'Invalid station' });
     return;
@@ -160,8 +171,12 @@ app.get('/api/forecast', async (req, res) => {
     res.status(400).json({ error: 'Invalid forecast model' });
     return;
   }
+  if (req.query.date && !date) {
+    res.status(400).json({ error: 'Invalid forecast date' });
+    return;
+  }
 
-  const cacheKey = `${station}_${model}`;
+  const cacheKey = `${station}_${model}_${date || 'relative'}`;
   const cache = forecastCache.get(cacheKey) || { data: null, ts: 0 };
   if (cache.data && Date.now() - cache.ts < FORECAST_TTL_MS) {
     res.setHeader('X-Cache', 'HIT');
@@ -171,7 +186,7 @@ app.get('/api/forecast', async (req, res) => {
 
   try {
     if (!forecastInflight.has(cacheKey)) {
-      forecastInflight.set(cacheKey, fetchForecastData(station, model).finally(() => forecastInflight.delete(cacheKey)));
+      forecastInflight.set(cacheKey, fetchForecastData(station, model, date).finally(() => forecastInflight.delete(cacheKey)));
     }
     const data = await forecastInflight.get(cacheKey);
     forecastCache.set(cacheKey, { data, ts: Date.now() });

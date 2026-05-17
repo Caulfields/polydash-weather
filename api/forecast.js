@@ -16,15 +16,25 @@ function normalizeModel(value) {
   return /^[a-z0-9_]+$/.test(model) ? model : '';
 }
 
-async function fetchForecast(station, model) {
+function normalizeDate(value) {
+  const date = `${value || ''}`.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '';
+}
+
+async function fetchForecast(station, model, date) {
   const location = STATIONS[station];
   const params = new URLSearchParams({
     latitude: location.lat,
     longitude: location.lon,
     hourly: 'temperature_2m,precipitation,precipitation_probability,wind_speed_10m,wind_direction_10m',
-    forecast_days: '1',
     timezone: location.timezone,
   });
+  if (date) {
+    params.set('start_date', date);
+    params.set('end_date', date);
+  } else {
+    params.set('forecast_days', '2');
+  }
   if (model !== 'auto') params.set('models', model);
 
   const upstream = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`, {
@@ -49,6 +59,7 @@ module.exports = async function handler(req, res) {
 
   const station = normalizeStation(req.query.station);
   const model = normalizeModel(req.query.model);
+  const date = normalizeDate(req.query.date);
   if (!STATIONS[station]) {
     res.status(400).end(JSON.stringify({ error: 'Invalid station code' }));
     return;
@@ -57,8 +68,12 @@ module.exports = async function handler(req, res) {
     res.status(400).end(JSON.stringify({ error: 'Invalid forecast model' }));
     return;
   }
+  if (req.query.date && !date) {
+    res.status(400).end(JSON.stringify({ error: 'Invalid forecast date' }));
+    return;
+  }
 
-  const cacheKey = `${station}_${model}`;
+  const cacheKey = `${station}_${model}_${date || 'relative'}`;
   const cache = forecastCache.get(cacheKey) || { data: null, ts: 0 };
   if (cache.data && Date.now() - cache.ts < FORECAST_TTL_MS) {
     res.setHeader('X-Cache', 'HIT');
@@ -68,7 +83,7 @@ module.exports = async function handler(req, res) {
 
   try {
     if (!forecastInflight.has(cacheKey)) {
-      forecastInflight.set(cacheKey, fetchForecast(station, model).finally(() => forecastInflight.delete(cacheKey)));
+      forecastInflight.set(cacheKey, fetchForecast(station, model, date).finally(() => forecastInflight.delete(cacheKey)));
     }
     const data = await forecastInflight.get(cacheKey);
     forecastCache.set(cacheKey, { data, ts: Date.now() });

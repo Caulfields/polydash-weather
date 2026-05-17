@@ -2,6 +2,28 @@ function cityTodayKey(timezone, date = new Date()) {
   return date.toLocaleDateString('en-CA', { timeZone: timezone });
 }
 
+function cityDateKeyForOffset(timezone, offsetDays = 0, date = new Date()) {
+  const [year, month, day] = cityTodayKey(timezone, date).split('-').map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1, day + offsetDays));
+  return shifted.toISOString().slice(0, 10);
+}
+
+function forecastDayOffset() {
+  return activeForecastDay === 'tomorrow' ? 1 : 0;
+}
+
+function activeForecastDateKey(timezone = activeCity.timezone) {
+  return cityDateKeyForOffset(timezone, forecastDayOffset());
+}
+
+function isTodayForecastSelected() {
+  return forecastDayOffset() === 0;
+}
+
+function forecastDayLabel() {
+  return isTodayForecastSelected() ? 'Today' : 'Tomorrow';
+}
+
 function hourlyField(hourly, base, modelId) {
   if (modelId && modelId !== 'auto') {
     const modelField = `${base}_${modelId}`;
@@ -44,7 +66,7 @@ function parseHourlyRows(hourly, dateKey, modelId) {
 }
 
 function buildHourlyState(hourly, timezone, sourceLabel, modelId) {
-  const dateKey = cityTodayKey(timezone);
+  const dateKey = activeForecastDateKey(timezone);
   return {
     dateKey,
     rows: parseHourlyRows(hourly, dateKey, modelId),
@@ -68,7 +90,7 @@ function setOmHeader() {
   const bestBtn = document.getElementById('omModeBest');
   const avgBtn = document.getElementById('omModeAvg');
   if (!badge) return;
-  const averaged = averagedModelsById?.[activeForecastModel];
+  const averaged = artificialAverageModel(activeForecastModel);
   badge.textContent = averaged
     ? averaged.label
     : activeForecastModel === 'auto'
@@ -97,16 +119,30 @@ function windDir(degValue) {
 async function fetchOpenMeteo() {
   const requestCityId = activeCity.id;
   const requestModel = activeForecastModel;
-  const averaged = averagedModelsById?.[requestModel];
+  const averaged = artificialAverageModel(requestModel);
   try {
     setOmHeader();
     document.getElementById('omLoading').style.display = '';
     document.getElementById('omLoading').textContent = 'Loading...';
-    if (averaged) {
+    if (averaged?.rows?.length) {
       hourlyOmState = {
-        dateKey: cityTodayKey(activeCity.timezone),
+        dateKey: activeForecastDateKey(activeCity.timezone),
         rows: averaged.rows,
         sourceLabel: 'Avg',
+      };
+      omData = null;
+      document.getElementById('omLoading').style.display = 'none';
+      drawChart();
+      return;
+    }
+    if (averaged?.modelIds?.length) {
+      const rows = await fetchAverageModelRows(averaged.modelIds, requestCityId);
+      if (requestCityId !== activeCity.id || requestModel !== activeForecastModel) return;
+      if (!rows.length) throw new Error(`${averaged.label} has no shared data for this location`);
+      hourlyOmState = {
+        dateKey: activeForecastDateKey(activeCity.timezone),
+        rows,
+        sourceLabel: averaged.saved ? 'Saved avg' : 'Avg',
       };
       omData = null;
       document.getElementById('omLoading').style.display = 'none';
@@ -136,6 +172,7 @@ function buildOpenMeteoUrl() {
   const params = new URLSearchParams({
     station: activeCity.metar,
     model: activeForecastModel,
+    date: activeForecastDateKey(activeCity.timezone),
   });
   return `/api/forecast?${params.toString()}`;
 }

@@ -225,11 +225,34 @@ function clearTemperatureHighlight() {
 }
 
 async function loadMetar() {
+  if (!isTodayForecastSelected()) return;
   const requestCityId = activeCity.id;
+  const requestStation = activeCity.metar;
+  const requestTimezone = activeCity.timezone;
+  const cacheKey = `${requestStation}_${cityTodayKey(requestTimezone)}`;
+  const cached = metarCacheByStation[cacheKey];
+  if (cached && Date.now() - cached.loadedAt < METAR_CACHE_TTL_MS) {
+    metarToday = cached.rows;
+    metarObsTime = cached.obsTime;
+    updateMetarUI();
+    drawChart();
+    document.getElementById('metarUpd').textContent = fmtMetarAge(metarObsTime);
+    return;
+  }
+
   try {
-    const res = await fetch(`/api/metar?station=${activeCity.metar}`, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const payload = await res.json();
+    if (!metarInflightByStation[requestStation]) {
+      metarInflightByStation[requestStation] = fetch(`/api/metar?station=${requestStation}`, { cache: 'no-store' })
+        .then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .finally(() => {
+          delete metarInflightByStation[requestStation];
+        });
+    }
+
+    const payload = await metarInflightByStation[requestStation];
     const raw = Array.isArray(payload)
       ? payload
       : Array.isArray(payload?.data)
@@ -260,8 +283,14 @@ async function loadMetar() {
 
     metarToday = obs.filter((item) => cityDateStr(item.time) === todayStr);
     metarObsTime = metarToday.length ? metarToday[metarToday.length - 1].time.getTime() : Date.now();
+    metarCacheByStation[cacheKey] = {
+      rows: metarToday,
+      obsTime: metarObsTime,
+      loadedAt: Date.now(),
+    };
+    if (!isTodayForecastSelected()) return;
 
-    document.getElementById('chartTitle').textContent = `${activeCity.metar} Temperature Today`;
+    document.getElementById('chartTitle').textContent = `${activeCity.metar} Temperature ${forecastDayLabel()}`;
     updateMetarUI();
     drawChart();
     document.getElementById('metarUpd').textContent = fmtMetarAge(metarObsTime);
@@ -401,7 +430,9 @@ function drawChart() {
 
   const forecastRows = getForecastRows();
   const nowHour = currentCityHourFrac();
-  const observedToday = metarToday.filter((item) => toHourFrac(item.time) <= nowHour + 0.25);
+  const observedToday = isTodayForecastSelected()
+    ? metarToday.filter((item) => toHourFrac(item.time) <= nowHour + 0.25)
+    : [];
 
   if (!observedToday.length && !forecastRows.length) {
     ctx.fillStyle = 'rgba(139,146,169,0.4)';
@@ -500,7 +531,7 @@ function drawChart() {
   updateTemperatureHighlightStatus(forecastRows);
 
   const nowX = xOfHr(nowHour);
-  if (nowX >= pad.left && nowX <= pad.left + chartWidth) {
+  if (isTodayForecastSelected() && nowX >= pad.left && nowX <= pad.left + chartWidth) {
     ctx.save();
     ctx.setLineDash([4, 4]);
     ctx.strokeStyle = 'rgba(231,235,244,0.35)';

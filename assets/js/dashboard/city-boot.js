@@ -3,11 +3,13 @@ const GREEN_CITIES_STORAGE_KEY = 'polydash.greenCityIds';
 const RED_CITIES_STORAGE_KEY = 'polydash.redCityIds';
 const CITY_NOTES_STORAGE_KEY = 'polydash.cityNotes';
 const CITY_NOTES_OPEN_STORAGE_KEY = 'polydash.cityNotesOpen';
+const SAVED_AVERAGE_MODELS_STORAGE_KEY = 'polydash.savedAverageModelsByCity';
 let citySearchQuery = '';
 let favoriteCityIds = loadStoredCityIdSet(FAVORITE_CITIES_STORAGE_KEY);
 let greenCityIds = loadStoredCityIdSet(GREEN_CITIES_STORAGE_KEY);
 let redCityIds = loadStoredCityIdSet(RED_CITIES_STORAGE_KEY);
 let cityNotesById = loadCityNotes();
+let savedAverageModelsByCity = loadSavedAverageModels();
 let locationNotesOpen = loadLocationNotesOpen();
 let cityFilterMode = 'all';
 let rankedModelIds = [];
@@ -118,6 +120,100 @@ function saveCityNotes() {
   localStorage.setItem(CITY_NOTES_STORAGE_KEY, JSON.stringify(cityNotesById));
 }
 
+function savedAverageId(cityId, modelIds) {
+  return `saved_avg_${cityId}_${modelIds.join('__')}`;
+}
+
+function validSavedAverage(cityId, item) {
+  if (!CITIES[cityId] || !item || !Array.isArray(item.modelIds)) return null;
+  const modelIds = item.modelIds.filter((id) => WEATHER_MODELS[id]);
+  if (modelIds.length < 2) return null;
+  const uniqueModelIds = [...new Set(modelIds)];
+  return {
+    id: savedAverageId(cityId, uniqueModelIds),
+    modelIds: uniqueModelIds,
+    label: item.label || averagedModelLabel(uniqueModelIds),
+    saved: true,
+    createdAt: Number.isFinite(item.createdAt) ? item.createdAt : Date.now(),
+  };
+}
+
+function loadSavedAverageModels() {
+  try {
+    const raw = localStorage.getItem(SAVED_AVERAGE_MODELS_STORAGE_KEY);
+    const parsed = JSON.parse(raw || '{}');
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .map(([cityId, items]) => [
+          cityId,
+          Array.isArray(items)
+            ? items.map((item) => validSavedAverage(cityId, item)).filter(Boolean)
+            : [],
+        ])
+        .filter(([cityId, items]) => CITIES[cityId] && items.length),
+    );
+  } catch (error) {
+    return {};
+  }
+}
+
+function saveSavedAverageModels() {
+  localStorage.setItem(SAVED_AVERAGE_MODELS_STORAGE_KEY, JSON.stringify(savedAverageModelsByCity));
+}
+
+function currentSavedAverageModels() {
+  return savedAverageModelsByCity[activeCity.id] || [];
+}
+
+function artificialAverageModel(modelId) {
+  return averagedModelsById[modelId] || currentSavedAverageModels().find((item) => item.id === modelId) || null;
+}
+
+function latestRuntimeAverageModel() {
+  return Object.values(averagedModelsById).find((item) => item?.modelIds?.length) || null;
+}
+
+function saveLatestAverageModel() {
+  const status = document.getElementById('modelRankStatus');
+  const average = latestRuntimeAverageModel();
+  if (!average) {
+    if (status) status.textContent = 'No average to save yet';
+    return;
+  }
+
+  const modelIds = [...new Set(average.modelIds)];
+  const saved = {
+    id: savedAverageId(activeCity.id, modelIds),
+    modelIds,
+    label: averagedModelLabel(modelIds),
+    saved: true,
+    createdAt: Date.now(),
+  };
+  const existing = currentSavedAverageModels().filter((item) => item.id !== saved.id);
+  savedAverageModelsByCity[activeCity.id] = [saved, ...existing];
+  saveSavedAverageModels();
+  activeForecastModel = saved.id;
+  renderModelDock();
+  if (status) status.textContent = `Saved: ${saved.label}`;
+  fetchOpenMeteo().catch(console.error);
+}
+
+function deleteSavedAverageModel(modelId) {
+  const saved = currentSavedAverageModels().find((item) => item.id === modelId);
+  if (!saved) return;
+  savedAverageModelsByCity[activeCity.id] = currentSavedAverageModels().filter((item) => item.id !== modelId);
+  if (!savedAverageModelsByCity[activeCity.id].length) delete savedAverageModelsByCity[activeCity.id];
+  saveSavedAverageModels();
+  if (activeForecastModel === modelId) {
+    activeForecastModel = cityModelOptions()[0] || 'auto';
+    hourlyOmState = null;
+    omData = null;
+    fetchOpenMeteo().catch(console.error);
+  }
+  renderModelDock();
+}
+
 function loadLocationNotesOpen() {
   return localStorage.getItem(CITY_NOTES_OPEN_STORAGE_KEY) !== 'false';
 }
@@ -182,10 +278,13 @@ function cityModelOptions() {
   const options = activeCity.modelOptions?.length ? activeCity.modelOptions : US_MODELS.slice(0, 10);
   const visibleOptions = options.slice(0, options.length >= 20 ? 20 : 10);
   const averagedIds = rankedCityId === activeCity.id ? Object.keys(averagedModelsById) : [];
-  if (rankedCityId !== activeCity.id || (!rankedModelIds.length && !averagedIds.length)) return visibleOptions;
+  const savedIds = currentSavedAverageModels().map((item) => item.id);
+  if (rankedCityId !== activeCity.id || (!rankedModelIds.length && !averagedIds.length)) {
+    return [...savedIds, ...visibleOptions];
+  }
   const ranked = rankedModelIds.filter((id) => visibleOptions.includes(id));
   const rest = visibleOptions.filter((id) => !ranked.includes(id));
-  return [...averagedIds, ...ranked, ...rest];
+  return [...savedIds, ...averagedIds, ...ranked, ...rest];
 }
 
 function renderModelDock() {
@@ -195,34 +294,56 @@ function renderModelDock() {
   if (!options.includes(activeForecastModel)) activeForecastModel = options[0] || 'auto';
   dock.innerHTML = options.map((id) => {
     const score = modelScoresById[id];
-    const averaged = averagedModelsById[id];
+    const averaged = artificialAverageModel(id);
     const rankedClass = rankedCityId === activeCity.id && score ? ' ranked' : '';
+    const savedClass = averaged?.saved ? ' saved' : '';
     const title = score
       ? `MAE ${score.mae.toFixed(1)}${tempUnitLabel()} / ${score.matches} matches`
       : averaged?.label || WEATHER_MODELS[id] || id;
     const scoreText = score ? `<span class="model-score">${score.mae.toFixed(1)}${tempUnitLabel()}</span>` : '';
+    const deleteButton = averaged?.saved
+      ? `<button class="model-delete-button" type="button" title="Delete saved average" aria-label="Delete ${title}" onclick="deleteSavedAverageModel('${id}')">×</button>`
+      : '';
     return `
-    <button class="model-button${id === activeForecastModel ? ' active' : ''}${rankedClass}" title="${title}" type="button" onclick="selectForecastModel('${id}')">
-      ${averaged?.label || WEATHER_MODELS[id] || id}
-      ${scoreText}
-    </button>
+    <span class="model-chip${savedClass}">
+      <button class="model-button${id === activeForecastModel ? ' active' : ''}${rankedClass}${savedClass}" title="${title}" type="button" onclick="selectForecastModel('${id}')">
+        ${averaged?.label || WEATHER_MODELS[id] || id}
+        ${scoreText}
+      </button>
+      ${deleteButton}
+    </span>
   `;
   }).join('');
 }
 
-function setCityChrome() {
+function renderForecastDayControls() {
+  ['today', 'tomorrow'].forEach((day) => {
+    const button = document.getElementById(`forecastDay${day.charAt(0).toUpperCase()}${day.slice(1)}`);
+    if (!button) return;
+    const active = activeForecastDay === day;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', `${active}`);
+  });
+}
+
+function setCityChrome(options = {}) {
+  const resetObservations = options.resetObservations !== false;
   const pageTitle = document.getElementById('pageTitle');
   const stationLabel = document.getElementById('stationLabel');
   if (pageTitle) pageTitle.textContent = `${activeCity.name} Weather`;
   if (stationLabel) stationLabel.textContent = `${activeCity.metar} · ${activeCity.airport}`;
-  document.getElementById('chartTitle').textContent = `${activeCity.metar} Temperature Today`;
-  document.getElementById('tempNow').innerHTML = `--<span class="temp-unit">${tempUnitLabel()}</span>`;
-  document.getElementById('metarRaw').textContent = 'loading...';
-  document.getElementById('cfMin').textContent = '--';
-  document.getElementById('cfMax').textContent = '--';
-  document.getElementById('cfWeather').textContent = '--';
-  document.getElementById('cfWind').textContent = '--';
-  document.getElementById('metarUpd').textContent = '--';
+  document.getElementById('chartTitle').textContent = `${activeCity.metar} Temperature ${forecastDayLabel()}`;
+  if (resetObservations) {
+    document.getElementById('tempNow').innerHTML = `--<span class="temp-unit">${tempUnitLabel()}</span>`;
+    document.getElementById('metarRaw').textContent = isTodayForecastSelected() ? 'loading...' : 'METAR is today-only';
+    document.getElementById('cfMin').textContent = '--';
+    document.getElementById('cfMax').textContent = '--';
+    document.getElementById('cfWeather').textContent = '--';
+    document.getElementById('cfWind').textContent = '--';
+    document.getElementById('metarUpd').textContent = '--';
+  } else if (metarToday.length) {
+    updateMetarUI();
+  }
   document.getElementById('omLoading').style.display = '';
   document.getElementById('omLoading').textContent = 'Loading...';
 
@@ -230,6 +351,7 @@ function setCityChrome() {
     button.classList.toggle('active', button.id === `cityTab-${activeCity.id}`);
   });
   renderModelDock();
+  renderForecastDayControls();
   renderLocationNotes();
   renderCityListControls();
 
@@ -326,11 +448,12 @@ function resetModelRanking() {
   const dayButton = document.getElementById('modelRankDayBtn');
   const dayComboButton = document.getElementById('modelComboRankDayBtn');
   const status = document.getElementById('modelRankStatus');
-  if (button) button.disabled = false;
-  if (comboButton) comboButton.disabled = false;
-  if (dayButton) dayButton.disabled = false;
-  if (dayComboButton) dayComboButton.disabled = false;
-  if (status) status.textContent = '';
+  const rankingAvailable = isTodayForecastSelected();
+  if (button) button.disabled = !rankingAvailable;
+  if (comboButton) comboButton.disabled = !rankingAvailable;
+  if (dayButton) dayButton.disabled = !rankingAvailable;
+  if (dayComboButton) dayComboButton.disabled = !rankingAvailable;
+  if (status) status.textContent = rankingAvailable ? '' : 'Model ranking is available for today only';
 }
 
 function setRankingButtonsDisabled(disabled) {
@@ -338,16 +461,18 @@ function setRankingButtonsDisabled(disabled) {
   const comboButton = document.getElementById('modelComboRankBtn');
   const dayButton = document.getElementById('modelRankDayBtn');
   const dayComboButton = document.getElementById('modelComboRankDayBtn');
-  if (button) button.disabled = disabled;
-  if (comboButton) comboButton.disabled = disabled;
-  if (dayButton) dayButton.disabled = disabled;
-  if (dayComboButton) dayComboButton.disabled = disabled;
+  const unavailable = disabled || !isTodayForecastSelected();
+  if (button) button.disabled = unavailable;
+  if (comboButton) comboButton.disabled = unavailable;
+  if (dayButton) dayButton.disabled = unavailable;
+  if (dayComboButton) dayComboButton.disabled = unavailable;
 }
 
 function forecastUrlForModel(modelId) {
   const params = new URLSearchParams({
     station: activeCity.metar,
     model: modelId,
+    date: activeForecastDateKey(activeCity.timezone),
   });
   return `/api/forecast?${params.toString()}`;
 }
@@ -430,7 +555,7 @@ async function fetchModelScore(modelId, runCityId) {
   if (!res.ok) throw new Error(`${WEATHER_MODELS[modelId] || modelId}: HTTP ${res.status}`);
   const data = await res.json();
   if (runCityId !== activeCity.id) return null;
-  const rows = parseHourlyRows(data.hourly || {}, cityTodayKey(activeCity.timezone), modelId);
+  const rows = parseHourlyRows(data.hourly || {}, activeForecastDateKey(activeCity.timezone), modelId);
   const score = scoreForecastRows(rows);
   return score ? { id: modelId, ...score } : null;
 }
@@ -440,7 +565,7 @@ async function fetchModelScoreFromHour(modelId, runCityId, startHour) {
   if (!res.ok) throw new Error(`${WEATHER_MODELS[modelId] || modelId}: HTTP ${res.status}`);
   const data = await res.json();
   if (runCityId !== activeCity.id) return null;
-  const rows = parseHourlyRows(data.hourly || {}, cityTodayKey(activeCity.timezone), modelId);
+  const rows = parseHourlyRows(data.hourly || {}, activeForecastDateKey(activeCity.timezone), modelId);
   const score = scoreForecastRowsFromHour(rows, startHour);
   return score ? { id: modelId, ...score } : null;
 }
@@ -450,8 +575,19 @@ async function fetchModelRows(modelId, runCityId) {
   if (!res.ok) throw new Error(`${WEATHER_MODELS[modelId] || modelId}: HTTP ${res.status}`);
   const data = await res.json();
   if (runCityId !== activeCity.id) return null;
-  const rows = parseHourlyRows(data.hourly || {}, cityTodayKey(activeCity.timezone), modelId);
+  const rows = parseHourlyRows(data.hourly || {}, activeForecastDateKey(activeCity.timezone), modelId);
   return rows.length ? { id: modelId, rows } : null;
+}
+
+async function fetchAverageModelRows(modelIds, runCityId) {
+  const settled = await Promise.allSettled(modelIds.map((id) => fetchModelRows(id, runCityId)));
+  const modelRows = settled
+    .map((item) => item.status === 'fulfilled' ? item.value : null)
+    .filter(Boolean);
+  if (modelRows.length !== modelIds.length) {
+    throw new Error('Could not load every saved average member');
+  }
+  return averageForecastRows(modelRows);
 }
 
 function combinations(items, size) {
@@ -522,6 +658,7 @@ function averagedModelLabel(modelIds) {
 }
 
 async function rankForecastModels() {
+  if (!isTodayForecastSelected()) return;
   const runId = ++rankingRunId;
   const runCityId = activeCity.id;
   const status = document.getElementById('modelRankStatus');
@@ -574,6 +711,7 @@ async function rankForecastModels() {
 }
 
 async function rankForecastModelAverages() {
+  if (!isTodayForecastSelected()) return;
   const runId = ++rankingRunId;
   const runCityId = activeCity.id;
   const status = document.getElementById('modelRankStatus');
@@ -665,7 +803,7 @@ async function rankForecastModelAverages() {
     modelScoresById[bestCombo.id] = bestCombo;
     activeForecastModel = bestCombo.id;
     hourlyOmState = {
-      dateKey: cityTodayKey(activeCity.timezone),
+      dateKey: activeForecastDateKey(activeCity.timezone),
       rows: bestCombo.rows,
       sourceLabel: 'Avg',
     };
@@ -690,6 +828,7 @@ async function rankForecastModelAverages() {
 }
 
 async function rankForecastModelsFromFive() {
+  if (!isTodayForecastSelected()) return;
   const startHour = 5;
   const runId = ++rankingRunId;
   const runCityId = activeCity.id;
@@ -743,6 +882,7 @@ async function rankForecastModelsFromFive() {
 }
 
 async function rankForecastModelAveragesFromFive() {
+  if (!isTodayForecastSelected()) return;
   const startHour = 5;
   const runId = ++rankingRunId;
   const runCityId = activeCity.id;
@@ -835,7 +975,7 @@ async function rankForecastModelAveragesFromFive() {
     modelScoresById[bestCombo.id] = bestCombo;
     activeForecastModel = bestCombo.id;
     hourlyOmState = {
-      dateKey: cityTodayKey(activeCity.timezone),
+      dateKey: activeForecastDateKey(activeCity.timezone),
       rows: bestCombo.rows,
       sourceLabel: 'Avg',
     };
@@ -862,10 +1002,10 @@ async function rankForecastModelAveragesFromFive() {
 function selectForecastModel(modelId) {
   if (activeForecastModel === modelId) return;
   activeForecastModel = modelId;
-  const averaged = averagedModelsById[modelId];
-  if (averaged) {
+  const averaged = artificialAverageModel(modelId);
+  if (averaged?.rows?.length) {
     hourlyOmState = {
-      dateKey: cityTodayKey(activeCity.timezone),
+      dateKey: activeForecastDateKey(activeCity.timezone),
       rows: averaged.rows,
       sourceLabel: 'Avg',
     };
@@ -876,14 +1016,35 @@ function selectForecastModel(modelId) {
   }
   renderModelDock();
   document.getElementById('omLoading').style.display = '';
-  document.getElementById('omLoading').textContent = averaged ? '' : 'Loading...';
+  document.getElementById('omLoading').textContent = 'Loading...';
   drawChart();
-  if (averaged) {
+  if (averaged?.rows?.length) {
     document.getElementById('omLoading').style.display = 'none';
     setOmHeader();
   } else {
     fetchOpenMeteo().catch(console.error);
   }
+}
+
+function setForecastDay(day) {
+  const nextDay = day === 'tomorrow' ? 'tomorrow' : 'today';
+  if (activeForecastDay === nextDay) return;
+  activeForecastDay = nextDay;
+  rankingRunId += 1;
+  rankedModelIds = [];
+  modelScoresById = {};
+  averagedModelsById = {};
+  rankedCityId = null;
+  hourlyOmState = null;
+  omData = null;
+  chartState = null;
+  setCityChrome({ resetObservations: false });
+  setRankingButtonsDisabled(false);
+  const status = document.getElementById('modelRankStatus');
+  if (status) status.textContent = isTodayForecastSelected() ? '' : 'Model ranking is available for today only';
+  drawChart();
+  if (isTodayForecastSelected()) loadMetar().catch(console.error);
+  fetchOpenMeteo().catch(console.error);
 }
 
 function switchCity(cityId) {
@@ -901,7 +1062,9 @@ function switchCity(cityId) {
 
   setCityChrome();
   drawChart();
-  Promise.all([loadMetar(), fetchOpenMeteo()]).catch(console.error);
+  const requests = [fetchOpenMeteo()];
+  if (isTodayForecastSelected()) requests.push(loadMetar());
+  Promise.all(requests).catch(console.error);
 }
 
 setupCitySearch();
@@ -909,8 +1072,10 @@ renderCityList();
 setCityChrome();
 buildLegend();
 setupChartMouse();
-loadMetar().catch(console.error);
+if (isTodayForecastSelected()) loadMetar().catch(console.error);
 fetchOpenMeteo().catch(console.error);
-setInterval(loadMetar, METAR_REFRESH_MS);
+setInterval(() => {
+  if (isTodayForecastSelected()) loadMetar().catch(console.error);
+}, METAR_REFRESH_MS);
 setInterval(fetchOpenMeteo, OM_REFRESH_MS);
 setInterval(tickCityClock, 1000);

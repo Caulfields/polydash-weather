@@ -49,6 +49,10 @@
             <span class="eyebrow">Observed and forecast</span>
             <h2 id="chartTitle">ZBAA Temperature Today</h2>
           </div>
+          <div class="forecast-day-switch" id="forecastDaySwitch" aria-label="Forecast day">
+            <button class="forecast-day-btn active" id="forecastDayToday" type="button" aria-pressed="true" onclick="setForecastDay('today')">Today</button>
+            <button class="forecast-day-btn" id="forecastDayTomorrow" type="button" aria-pressed="false" onclick="setForecastDay('tomorrow')">Tomorrow</button>
+          </div>
           <span class="metar-raw" id="metarRaw">loading...</span>
           <span class="source-badge" id="omBadge">OM</span>
           <div class="om-switch" id="omSwitch">
@@ -78,6 +82,7 @@
         <div class="model-tools">
           <button class="rank-button" id="modelRankBtn" type="button" onclick="rankForecastModels()">Find best model</button>
           <button class="rank-button combo" id="modelComboRankBtn" type="button" onclick="rankForecastModelAverages()">Find best average</button>
+          <button class="rank-button save-average" id="modelSaveAverageBtn" type="button" onclick="saveLatestAverageModel()">Save average</button>
           <button class="rank-button daytime" id="modelRankDayBtn" type="button" onclick="rankForecastModelsFromFive()">Best model from 05</button>
           <button class="rank-button daytime combo" id="modelComboRankDayBtn" type="button" onclick="rankForecastModelAveragesFromFive()">Best average from 05</button>
           <span class="rank-status" id="modelRankStatus"></span>
