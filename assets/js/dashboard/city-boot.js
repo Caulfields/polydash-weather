@@ -1,20 +1,24 @@
 const FAVORITE_CITIES_STORAGE_KEY = 'polydash.favoriteCityIds';
+const GREEN_CITIES_STORAGE_KEY = 'polydash.greenCityIds';
+const RED_CITIES_STORAGE_KEY = 'polydash.redCityIds';
 const CITY_NOTES_STORAGE_KEY = 'polydash.cityNotes';
 const CITY_NOTES_OPEN_STORAGE_KEY = 'polydash.cityNotesOpen';
 let citySearchQuery = '';
-let favoriteCityIds = loadFavoriteCityIds();
+let favoriteCityIds = loadStoredCityIdSet(FAVORITE_CITIES_STORAGE_KEY);
+let greenCityIds = loadStoredCityIdSet(GREEN_CITIES_STORAGE_KEY);
+let redCityIds = loadStoredCityIdSet(RED_CITIES_STORAGE_KEY);
 let cityNotesById = loadCityNotes();
 let locationNotesOpen = loadLocationNotesOpen();
-let showFavoriteCitiesOnly = false;
+let cityFilterMode = 'all';
 let rankedModelIds = [];
 let modelScoresById = {};
 let averagedModelsById = {};
 let rankedCityId = null;
 let rankingRunId = 0;
 
-function loadFavoriteCityIds() {
+function loadStoredCityIdSet(storageKey) {
   try {
-    const raw = localStorage.getItem(FAVORITE_CITIES_STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     const ids = JSON.parse(raw || '[]');
     return new Set(Array.isArray(ids) ? ids.filter((id) => CITIES[id]) : []);
   } catch (error) {
@@ -22,8 +26,79 @@ function loadFavoriteCityIds() {
   }
 }
 
-function saveFavoriteCityIds() {
-  localStorage.setItem(FAVORITE_CITIES_STORAGE_KEY, JSON.stringify([...favoriteCityIds]));
+function saveStoredCityIdSet(storageKey, values) {
+  localStorage.setItem(storageKey, JSON.stringify([...values]));
+}
+
+function cityListMembership(cityId) {
+  return {
+    favorite: favoriteCityIds.has(cityId),
+    green: greenCityIds.has(cityId),
+    red: redCityIds.has(cityId),
+  };
+}
+
+function citySetForType(listType) {
+  const lists = {
+    favorite: {
+      values: favoriteCityIds,
+      storageKey: FAVORITE_CITIES_STORAGE_KEY,
+      label: 'favorites',
+    },
+    green: {
+      values: greenCityIds,
+      storageKey: GREEN_CITIES_STORAGE_KEY,
+      label: 'green list',
+    },
+    red: {
+      values: redCityIds,
+      storageKey: RED_CITIES_STORAGE_KEY,
+      label: 'red list',
+    },
+  };
+  return lists[listType] || null;
+}
+
+function cityFilterMatches(city) {
+  if (cityFilterMode === 'favorite') return favoriteCityIds.has(city.id);
+  if (cityFilterMode === 'green') return greenCityIds.has(city.id);
+  if (cityFilterMode === 'red') return redCityIds.has(city.id);
+  return true;
+}
+
+function cityEmptyStateText() {
+  if (cityFilterMode === 'favorite') return 'No favorite cities match';
+  if (cityFilterMode === 'green') return 'No green-list cities match';
+  if (cityFilterMode === 'red') return 'No red-list cities match';
+  return 'No matching cities';
+}
+
+function renderCityListControls() {
+  const controls = document.getElementById('activeCityListControls');
+  if (!controls) return;
+  const membership = cityListMembership(activeCity.id);
+  controls.innerHTML = [
+    {
+      type: 'green',
+      icon: '&#9679;',
+      active: membership.green,
+      shortLabel: 'Green',
+    },
+    {
+      type: 'red',
+      icon: '&#9679;',
+      active: membership.red,
+      shortLabel: 'Red',
+    },
+  ].map((item) => {
+    const config = citySetForType(item.type);
+    return `
+      <button class="city-list-control city-list-control-${item.type}${item.active ? ' active' : ''}" type="button" title="${item.active ? `Remove from ${config.label}` : `Add to ${config.label}`}" aria-label="${item.active ? 'Remove ' : 'Add '}${activeCity.name} ${item.active ? 'from' : 'to'} ${config.label}" aria-pressed="${item.active}" onclick="toggleCityList('${activeCity.id}', '${item.type}')">
+        <span class="city-list-control-icon" aria-hidden="true">${item.icon}</span>
+        <span>${item.shortLabel}</span>
+      </button>
+    `;
+  }).join('');
 }
 
 function loadCityNotes() {
@@ -69,7 +144,7 @@ function renderCityList() {
   const cityList = document.getElementById('cityList');
   const query = citySearchQuery.trim().toLowerCase();
   const cities = Object.values(CITIES).filter((city) => {
-    if (showFavoriteCitiesOnly && !favoriteCityIds.has(city.id)) return false;
+    if (!cityFilterMatches(city)) return false;
     if (!query) return true;
     return [
       city.name,
@@ -89,16 +164,18 @@ function renderCityList() {
         <span class="city-airport">${city.airport}</span>
       </button>
       <button class="city-favorite-btn${favoriteCityIds.has(city.id) ? ' active' : ''}" type="button" title="${favoriteCityIds.has(city.id) ? 'Remove from favorites' : 'Add to favorites'}" aria-label="${favoriteCityIds.has(city.id) ? 'Remove ' : 'Add '}${city.name} ${favoriteCityIds.has(city.id) ? 'from' : 'to'} favorites" aria-pressed="${favoriteCityIds.has(city.id)}" onclick="toggleFavoriteCity('${city.id}')">
-        ${favoriteCityIds.has(city.id) ? '★' : '☆'}
+        ${favoriteCityIds.has(city.id) ? '&#9733;' : '&#9734;'}
       </button>
     </div>
-  `).join('') : `<div class="city-empty">${showFavoriteCitiesOnly ? 'No favorite cities match' : 'No matching cities'}</div>`;
+  `).join('') : `<div class="city-empty">${cityEmptyStateText()}</div>`;
 
-  const filterButton = document.getElementById('cityFavoritesFilter');
-  if (filterButton) {
-    filterButton.classList.toggle('active', showFavoriteCitiesOnly);
-    filterButton.setAttribute('aria-pressed', `${showFavoriteCitiesOnly}`);
-  }
+  ['favorite', 'green', 'red'].forEach((mode) => {
+    const button = document.getElementById(`city${mode.charAt(0).toUpperCase()}${mode.slice(1)}sFilter`);
+    if (!button) return;
+    const active = cityFilterMode === mode;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', `${active}`);
+  });
 }
 
 function cityModelOptions() {
@@ -154,6 +231,7 @@ function setCityChrome() {
   });
   renderModelDock();
   renderLocationNotes();
+  renderCityListControls();
 
   const overlay = document.getElementById('tempChartOverlay');
   if (overlay) {
@@ -172,6 +250,20 @@ function setupCitySearch() {
   });
 }
 
+function toggleCityList(cityId, listType) {
+  if (!CITIES[cityId]) return;
+  const target = citySetForType(listType);
+  if (!target) return;
+  if (target.values.has(cityId)) {
+    target.values.delete(cityId);
+  } else {
+    target.values.add(cityId);
+  }
+  saveStoredCityIdSet(target.storageKey, target.values);
+  renderCityList();
+  renderCityListControls();
+}
+
 function toggleFavoriteCity(cityId) {
   if (!CITIES[cityId]) return;
   if (favoriteCityIds.has(cityId)) {
@@ -179,12 +271,12 @@ function toggleFavoriteCity(cityId) {
   } else {
     favoriteCityIds.add(cityId);
   }
-  saveFavoriteCityIds();
+  saveStoredCityIdSet(FAVORITE_CITIES_STORAGE_KEY, favoriteCityIds);
   renderCityList();
 }
 
-function toggleFavoriteCityFilter() {
-  showFavoriteCitiesOnly = !showFavoriteCitiesOnly;
+function toggleCityFilter(filterMode) {
+  cityFilterMode = cityFilterMode === filterMode ? 'all' : filterMode;
   renderCityList();
 }
 

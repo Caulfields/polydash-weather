@@ -358,13 +358,6 @@ canvas#tempChartOverlay {
   padding: 0 16px 10px;
 }
 
-.temperature-finder-label {
-  color: var(--dim);
-  font-size: 11px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
 .temperature-finder-input {
   width: 92px;
   height: 30px;
@@ -420,6 +413,50 @@ canvas#tempChartOverlay {
 .temperature-finder-status.no-match,
 .temperature-finder-status.error {
   color: #fca5a5;
+}
+
+.active-city-list-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.city-list-control {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface2);
+  color: var(--dim);
+  cursor: pointer;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.city-list-control:hover,
+.city-list-control.active {
+  color: var(--text);
+}
+
+.city-list-control-green:hover,
+.city-list-control-green.active {
+  border-color: rgba(34, 197, 94, 0.65);
+  color: #86efac;
+}
+
+.city-list-control-red:hover,
+.city-list-control-red.active {
+  border-color: rgba(239, 68, 68, 0.65);
+  color: #fca5a5;
+}
+
+.city-list-control-icon {
+  font-size: 13px;
+  line-height: 1;
 }
 
 .rank-button {
@@ -662,12 +699,14 @@ canvas#tempChartOverlay {
 
 .city-filter-bar {
   flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
 }
 
 .city-filter-btn {
-  width: 100%;
   height: 32px;
   display: inline-flex;
   align-items: center;
@@ -688,10 +727,28 @@ canvas#tempChartOverlay {
   color: var(--text);
 }
 
+.city-filter-btn.green:hover,
+.city-filter-btn.green.active {
+  border-color: rgba(34, 197, 94, 0.65);
+}
+
+.city-filter-btn.red:hover,
+.city-filter-btn.red.active {
+  border-color: rgba(239, 68, 68, 0.65);
+}
+
 .favorite-icon {
   color: var(--orange);
   font-size: 14px;
   line-height: 1;
+}
+
+.city-filter-btn.green .favorite-icon {
+  color: var(--green);
+}
+
+.city-filter-btn.red .favorite-icon {
+  color: #ef4444;
 }
 
 .city-list {
@@ -860,7 +917,7 @@ canvas#tempChartOverlay {
   }
 
   .temperature-finder {
-    grid-template-columns: auto 92px auto;
+    grid-template-columns: minmax(0, 1fr) 92px auto;
   }
 
   .temperature-finder-status {
@@ -903,10 +960,15 @@ canvas#tempChartOverlay {
   }
 
   .temperature-finder {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr;
   }
 
-  .temperature-finder-label {
-    grid-column: 1 / -1;
+  .active-city-list-controls {
+    flex-wrap: wrap;
+  }
+
+  .temperature-finder-input,
+  .temperature-finder-clear {
+    width: 100%;
   }
 }

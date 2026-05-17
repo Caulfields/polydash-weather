@@ -83,7 +83,7 @@
           <span class="rank-status" id="modelRankStatus"></span>
         </div>
         <div class="temperature-finder">
-          <label class="temperature-finder-label" for="targetTempInput">Target temperature</label>
+          <div class="active-city-list-controls" id="activeCityListControls" aria-label="Active city lists"></div>
           <input class="temperature-finder-input" id="targetTempInput" type="text" inputmode="decimal" placeholder="12C" autocomplete="off" oninput="setTemperatureHighlight(this.value)" />
           <button class="temperature-finder-clear" id="targetTempClear" type="button" onclick="clearTemperatureHighlight()">Clear</button>
           <span class="temperature-finder-status" id="targetTempStatus"></span>
@@ -111,9 +111,17 @@
         <input class="city-search" id="citySearch" type="search" placeholder="Search city or code" autocomplete="off" />
       </div>
       <div class="city-filter-bar">
-        <button class="city-filter-btn" id="cityFavoritesFilter" type="button" aria-pressed="false" onclick="toggleFavoriteCityFilter()">
-          <span class="favorite-icon" aria-hidden="true">☆</span>
+        <button class="city-filter-btn" id="cityFavoritesFilter" type="button" aria-pressed="false" onclick="toggleCityFilter('favorite')">
+          <span class="favorite-icon" aria-hidden="true">&#9734;</span>
           Favorites
+        </button>
+        <button class="city-filter-btn green" id="cityGreensFilter" type="button" aria-pressed="false" onclick="toggleCityFilter('green')">
+          <span class="favorite-icon" aria-hidden="true">&#9679;</span>
+          Green list
+        </button>
+        <button class="city-filter-btn red" id="cityRedsFilter" type="button" aria-pressed="false" onclick="toggleCityFilter('red')">
+          <span class="favorite-icon" aria-hidden="true">&#9679;</span>
+          Red list
         </button>
       </div>
       <div class="city-list" id="cityList"></div>
