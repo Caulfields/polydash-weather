@@ -263,6 +263,10 @@ canvas#tempChartOverlay {
   color: #bfdbfe;
 }
 
+.tooltip-key.wind {
+  color: #a7f3d0;
+}
+
 .chart-tooltip-temp,
 .om-tooltip-temp {
   color: var(--orange);
@@ -272,6 +276,16 @@ canvas#tempChartOverlay {
 
 .chart-tooltip-temp.forecast {
   color: var(--blue);
+}
+
+.chart-tooltip-wind {
+  color: #6ee7b7;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tooltip-row-wind.is-empty {
+  display: none;
 }
 
 .om-tooltip-rain {

@@ -6,6 +6,7 @@ const path = require('path');
 const { STATIONS, normalizeStation } = require('./data/weather-stations');
 const { resolveCity, rankTemperature } = require('./lib/weather-ranking');
 const { buildSingleWeatherResponse, buildBatchWeatherResponse } = require('./lib/bot-weather');
+const { fetchForecast } = require('./lib/open-meteo');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname)));
 app.use(express.json({ limit: '64kb' }));
 
-const METAR_TTL_MS = 90_000;
+const METAR_TTL_MS = 30 * 60_000;
 const FORECAST_TTL_MS = 10 * 60_000;
 const metarCache = new Map();
 const forecastCache = new Map();
@@ -93,26 +94,50 @@ async function fetchMetarData(station, hours) {
   return normalizeMetarResponse(json);
 }
 
-async function fetchForecastData(station, model, date) {
-  const location = STATIONS[station];
-  const params = new URLSearchParams({
-    latitude: location.lat,
-    longitude: location.lon,
-    hourly: 'temperature_2m,precipitation,precipitation_probability,wind_speed_10m,wind_direction_10m',
-    timezone: location.timezone,
-  });
-  if (date) {
-    params.set('start_date', date);
-    params.set('end_date', date);
-  } else {
-    params.set('forecast_days', '2');
-  }
-  if (model !== 'auto') params.set('models', model);
+app.get('/api/forecast', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
 
-  const json = await fetchJson(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
-  if (!json.hourly?.time?.length) throw new Error('Open-Meteo missing hourly data');
-  return json;
-}
+  const station = normalizeStation(req.query.station);
+  const model = normalizeModel(req.query.model);
+  const date = normalizeDate(req.query.date);
+  if (!STATIONS[station]) {
+    res.status(400).json({ error: 'Invalid station' });
+    return;
+  }
+  if (!model) {
+    res.status(400).json({ error: 'Invalid forecast model' });
+    return;
+  }
+  if (req.query.date && !date) {
+    res.status(400).json({ error: 'Invalid forecast date' });
+    return;
+  }
+
+  const cacheKey = `${station}|${model}|${date}`;
+  const cache = forecastCache.get(cacheKey) || { data: null, ts: 0 };
+  if (cache.data && Date.now() - cache.ts < FORECAST_TTL_MS) {
+    res.setHeader('X-Cache', 'HIT');
+    res.json(cache.data);
+    return;
+  }
+
+  try {
+    if (!forecastInflight.has(cacheKey)) {
+      forecastInflight.set(cacheKey, fetchForecast(fetchJson, station, model, date).finally(() => forecastInflight.delete(cacheKey)));
+    }
+    const data = await forecastInflight.get(cacheKey);
+    forecastCache.set(cacheKey, { data, ts: Date.now() });
+    res.setHeader('X-Cache', 'MISS');
+    res.json(data);
+  } catch (error) {
+    if (cache.data) {
+      res.setHeader('X-Cache', 'STALE');
+      res.json(cache.data);
+      return;
+    }
+    res.status(502).json({ error: error.message });
+  }
+});
 
 app.get('/api/metar', async (req, res) => {
   const station = normalizeStation(req.query.station);
@@ -154,51 +179,6 @@ app.get('/api/metar', async (req, res) => {
       }
       res.status(502).json({ error: error.message || fallbackError.message });
     }
-  }
-});
-
-app.get('/api/forecast', async (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-
-  const station = normalizeStation(req.query.station);
-  const model = normalizeModel(req.query.model);
-  const date = normalizeDate(req.query.date);
-  if (!STATIONS[station]) {
-    res.status(400).json({ error: 'Invalid station' });
-    return;
-  }
-  if (!model) {
-    res.status(400).json({ error: 'Invalid forecast model' });
-    return;
-  }
-  if (req.query.date && !date) {
-    res.status(400).json({ error: 'Invalid forecast date' });
-    return;
-  }
-
-  const cacheKey = `${station}_${model}_${date || 'relative'}`;
-  const cache = forecastCache.get(cacheKey) || { data: null, ts: 0 };
-  if (cache.data && Date.now() - cache.ts < FORECAST_TTL_MS) {
-    res.setHeader('X-Cache', 'HIT');
-    res.json(cache.data);
-    return;
-  }
-
-  try {
-    if (!forecastInflight.has(cacheKey)) {
-      forecastInflight.set(cacheKey, fetchForecastData(station, model, date).finally(() => forecastInflight.delete(cacheKey)));
-    }
-    const data = await forecastInflight.get(cacheKey);
-    forecastCache.set(cacheKey, { data, ts: Date.now() });
-    res.setHeader('X-Cache', 'MISS');
-    res.json(data);
-  } catch (error) {
-    if (cache.data) {
-      res.setHeader('X-Cache', 'STALE');
-      res.json(cache.data);
-      return;
-    }
-    res.status(502).json({ error: error.message });
   }
 });
 

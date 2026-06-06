@@ -96,6 +96,7 @@ function setOmHeader() {
     : activeForecastModel === 'auto'
     ? (activeCity.omBadge || 'OM')
     : (WEATHER_MODELS[activeForecastModel] || activeForecastModel);
+  badge.classList.remove('om-badge-owm');
   if (switchWrap) switchWrap.style.display = 'none';
   if (bestBtn && avgBtn) {
     bestBtn.className = 'om-mode-btn';
@@ -114,6 +115,21 @@ setInterval(() => {
 function windDir(degValue) {
   const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
   return dirs[Math.round(degValue / 22.5) % 16];
+}
+
+function compassFromDeg(degValue) {
+  if (typeof degValue !== 'number' || !Number.isFinite(degValue)) return null;
+  const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+  return dirs[Math.round(((degValue % 360) + 360) % 360 / 22.5) % 16];
+}
+
+function windTranscript({ speed, dirDeg, unit, variable } = {}) {
+  if (typeof speed !== 'number' || !Number.isFinite(speed)) return null;
+  const speedText = `${Math.round(speed)} ${unit}`;
+  if (variable) return `Variable at ${speedText}`;
+  const compass = compassFromDeg(dirDeg);
+  if (!compass) return speedText;
+  return `${compass} ${speedText}`;
 }
 
 async function fetchOpenMeteo() {

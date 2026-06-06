@@ -476,10 +476,15 @@ function drawChart() {
   ctx.fillStyle = 'rgba(139,146,169,0.6)';
   ctx.font = '10px Inter,system-ui,sans-serif';
   ctx.textAlign = 'center';
-  for (let hour = 0; hour <= 24; hour += 2) {
+  for (let hour = 0; hour <= 24; hour += 1) {
     const x = xOfHr(hour);
-    ctx.fillText(`${hour.toString().padStart(2, '0')}:00`, x, height - pad.bottom + 13);
-    ctx.strokeStyle = 'rgba(37,40,54,0.5)';
+    const isHalfHourMark = hour % 2 === 0;
+    if (isHalfHourMark) {
+      ctx.fillText(`${hour.toString().padStart(2, '0')}:00`, x, height - pad.bottom + 13);
+    } else {
+      ctx.fillText(`${(hour - 1).toString().padStart(2, '0')}:30`, x, height - pad.bottom + 13);
+    }
+    ctx.strokeStyle = isHalfHourMark ? 'rgba(37,40,54,0.5)' : 'rgba(37,40,54,0.25)';
     ctx.beginPath();
     ctx.moveTo(x, pad.top);
     ctx.lineTo(x, pad.top + chartHeight);
@@ -682,7 +687,7 @@ function setupChartMouse() {
 
   overlay.addEventListener('mousemove', (event) => {
     if (!chartState) return;
-    const { PAD, cW, cH, W, xOfHr, yOf, dpr, forecastRows, observedToday } = chartState;
+    const { PAD, cW, cH, W, H, xOfHr, yOf, dpr, forecastRows, observedToday } = chartState;
 
     const rect = overlay.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
@@ -764,8 +769,10 @@ function setupChartMouse() {
 
     ctx.restore();
 
-    const labelHour = Math.max(0, Math.min(23, Math.round(hoverHr)));
-    document.getElementById('ttTime').textContent = `${labelHour.toString().padStart(2, '0')}:00 ${activeCity.name}`;
+    const tooltipHourFrac = observedCandidate
+      ? toHourFrac(observedCandidate.time)
+      : forecastCandidate.hourFrac;
+    document.getElementById('ttTime').textContent = `${formatHourFrac(tooltipHourFrac)} ${activeCity.name}`;
 
     document.getElementById('ttMetarTemp').textContent = observedCandidate
       ? formatTempFromCelsius(observedCandidate.temp, observedTempOptions())
@@ -782,6 +789,31 @@ function setupChartMouse() {
         ? `${forecastCandidate.rain.toFixed(1)} mm rain · ${forecastCandidate.sourceLabel}`
         : forecastCandidate.sourceLabel)
       : 'no forecast point near this time';
+
+    const metarWindRow = document.getElementById('ttMetarWindRow');
+    const metarWindEl = document.getElementById('ttMetarWind');
+    const metarWind = observedCandidate
+      ? windTranscript({
+          speed: observedCandidate.wspd,
+          dirDeg: typeof observedCandidate.wdir === 'number' ? observedCandidate.wdir : null,
+          unit: 'kt',
+          variable: observedCandidate.wdir === 'VRB',
+        })
+      : null;
+    metarWindEl.textContent = metarWind || '--';
+    metarWindRow.classList.toggle('is-empty', !metarWind);
+
+    const forecastWindRow = document.getElementById('ttForecastWindRow');
+    const forecastWindEl = document.getElementById('ttForecastWind');
+    const forecastWind = forecastCandidate
+      ? windTranscript({
+          speed: forecastCandidate.windSpeed,
+          dirDeg: forecastCandidate.windDir,
+          unit: 'km/h',
+        })
+      : null;
+    forecastWindEl.textContent = forecastWind || '--';
+    forecastWindRow.classList.toggle('is-empty', !forecastWind);
 
     const tipW = 180;
     let tipX = mouseX + 14;
