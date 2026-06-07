@@ -366,9 +366,11 @@ function setCityChrome(options = {}) {
 function setupCitySearch() {
   const input = document.getElementById('citySearch');
   if (!input) return;
+  let debounce;
   input.addEventListener('input', () => {
     citySearchQuery = input.value;
-    renderCityList();
+    clearTimeout(debounce);
+    debounce = setTimeout(renderCityList, 200);
   });
 }
 
@@ -394,7 +396,19 @@ function toggleFavoriteCity(cityId) {
     favoriteCityIds.add(cityId);
   }
   saveStoredCityIdSet(FAVORITE_CITIES_STORAGE_KEY, favoriteCityIds);
-  renderCityList();
+  const card = document.getElementById(`cityTab-${cityId}`);
+  if (!card) { renderCityList(); return; }
+  const btn = card.querySelector('.city-favorite-btn');
+  if (!btn) { renderCityList(); return; }
+  const isFav = favoriteCityIds.has(cityId);
+  btn.innerHTML = isFav ? '&#9733;' : '&#9734;';
+  btn.classList.toggle('active', isFav);
+  btn.title = isFav ? 'Remove from favorites' : 'Add to favorites';
+  btn.setAttribute('aria-label', `${isFav ? 'Remove ' : 'Add '}${CITIES[cityId].name} ${isFav ? 'from' : 'to'} favorites`);
+  btn.setAttribute('aria-pressed', `${isFav}`);
+  if (cityFilterMode === 'favorite' && !isFav) {
+    card.style.display = 'none';
+  }
 }
 
 function toggleCityFilter(filterMode) {
@@ -774,7 +788,9 @@ async function rankForecastModelAverages() {
 
   for (const size of [2, 3, 4]) {
     const combos = combinations(comboPool, size);
-    for (const combo of combos) {
+    for (let i = 0; i < combos.length; i += 1) {
+      if (i % 5 === 0) await new Promise((r) => setTimeout(r, 0));
+      const combo = combos[i];
       if (runId !== rankingRunId || runCityId !== activeCity.id) return;
       tested += 1;
       if (status && (tested === 1 || tested % 25 === 0 || tested === total)) {
@@ -946,7 +962,9 @@ async function rankForecastModelAveragesFromEight() {
 
   for (const size of [2, 3, 4]) {
     const combos = combinations(comboPool, size);
-    for (const combo of combos) {
+    for (let i = 0; i < combos.length; i += 1) {
+      if (i % 5 === 0) await new Promise((r) => setTimeout(r, 0));
+      const combo = combos[i];
       if (runId !== rankingRunId || runCityId !== activeCity.id) return;
       tested += 1;
       if (status && (tested === 1 || tested % 25 === 0 || tested === total)) {
@@ -1066,7 +1084,7 @@ function switchCity(cityId) {
 
   setCityChrome();
   drawChart();
-  const requests = [fetchOpenMeteo()];
+  const requests = [fetchOpenMeteo(), fetchEcmwfTags()];
   if (isTodayForecastSelected()) requests.push(loadMetar());
   Promise.all(requests).catch(console.error);
 }
@@ -1078,8 +1096,25 @@ buildLegend();
 setupChartMouse();
 if (isTodayForecastSelected()) loadMetar().catch(console.error);
 fetchOpenMeteo().catch(console.error);
-setInterval(() => {
-  if (isTodayForecastSelected()) loadMetar().catch(console.error);
-}, METAR_REFRESH_MS);
-setInterval(fetchOpenMeteo, OM_REFRESH_MS);
-setInterval(tickCityClock, 1000);
+fetchEcmwfTags();
+const pollingIntervals = {
+  metar: setInterval(() => {
+    if (isTodayForecastSelected()) loadMetar().catch(console.error);
+  }, METAR_REFRESH_MS),
+  om: setInterval(fetchOpenMeteo, OM_REFRESH_MS),
+  ecmwf: setInterval(fetchEcmwfTags, 3600000),
+  clock: setInterval(tickCityClock, 15000),
+};
+
+function suspendPolling() {
+  Object.values(pollingIntervals).forEach(clearInterval);
+}
+
+function resumePolling() {
+  pollingIntervals.metar = setInterval(() => {
+    if (isTodayForecastSelected()) loadMetar().catch(console.error);
+  }, METAR_REFRESH_MS);
+  pollingIntervals.om = setInterval(fetchOpenMeteo, OM_REFRESH_MS);
+  pollingIntervals.ecmwf = setInterval(fetchEcmwfTags, 3600000);
+  pollingIntervals.clock = setInterval(tickCityClock, 15000);
+}

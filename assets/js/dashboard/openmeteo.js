@@ -108,7 +108,7 @@ function drawOmChart() {
   drawChart();
 }
 
-setInterval(() => {
+const omChartInterval = setInterval(() => {
   if (omData) drawOmChart();
 }, 60000);
 
@@ -149,6 +149,7 @@ async function fetchOpenMeteo() {
       omData = null;
       document.getElementById('omLoading').style.display = 'none';
       drawChart();
+      if (isTodayForecastSelected()) tryReuseEcmwfTags(hourlyOmState.rows);
       return;
     }
     if (averaged?.modelIds?.length) {
@@ -163,6 +164,7 @@ async function fetchOpenMeteo() {
       omData = null;
       document.getElementById('omLoading').style.display = 'none';
       drawChart();
+      if (isTodayForecastSelected()) tryReuseEcmwfTags(hourlyOmState.rows);
       return;
     }
     const res = await fetch(buildOpenMeteoUrl(), { cache: 'no-store' });
@@ -178,6 +180,9 @@ async function fetchOpenMeteo() {
     document.getElementById('omLoading').style.display = 'none';
     setOmHeader();
     drawChart();
+    if (isTodayForecastSelected() && requestModel === 'ecmwf_ifs025') {
+      updateEcmwfTagsDOM(hourlyOmState.rows);
+    }
   } catch (error) {
     console.warn('Open-Meteo fetch:', error.message);
     document.getElementById('omLoading').textContent = 'Open-Meteo unavailable';
@@ -196,3 +201,63 @@ function buildOpenMeteoUrl() {
 window.addEventListener('resize', () => {
   if (omData) drawOmChart();
 });
+
+function tryReuseEcmwfTags(rows) {
+  if (activeForecastModel === 'ecmwf_ifs025' && isTodayForecastSelected()) {
+    updateEcmwfTagsDOM(rows);
+  }
+}
+
+function updateEcmwfTagsDOM(rows) {
+  const tagWind = document.getElementById('tagWind');
+  const tagRain = document.getElementById('tagRain');
+  if (!tagWind || !tagRain) return;
+  tagWind.style.display = 'none';
+  tagRain.style.display = 'none';
+
+  const hasStrongWind = rows.some((row) => row.windSpeed != null && row.windSpeed > 10 && row.hourFrac >= 8);
+  const hasRain = rows.some((row) => row.rain != null && row.rain > 0);
+
+  if (hasStrongWind) {
+    tagWind.style.display = '';
+    tagWind.className = 'weather-tag wind';
+  }
+  if (hasRain) {
+    tagRain.style.display = '';
+    tagRain.className = 'weather-tag rain';
+  }
+}
+
+async function fetchEcmwfTags() {
+  const tagWind = document.getElementById('tagWind');
+  const tagRain = document.getElementById('tagRain');
+  if (!tagWind || !tagRain) return;
+
+  if (isTodayForecastSelected() && activeForecastModel === 'ecmwf_ifs025' && hourlyOmState?.rows?.length) {
+    updateEcmwfTagsDOM(hourlyOmState.rows);
+    return;
+  }
+
+  tagWind.style.display = 'none';
+  tagRain.style.display = 'none';
+
+  const requestCityId = activeCity.id;
+  const dateKey = cityTodayKey(activeCity.timezone);
+  const params = new URLSearchParams({
+    station: activeCity.metar,
+    model: 'ecmwf_ifs025',
+    date: dateKey,
+  });
+  try {
+    const res = await fetch(`/api/forecast?${params.toString()}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (requestCityId !== activeCity.id) return;
+    const rows = parseHourlyRows(data.hourly || {}, dateKey, 'ecmwf_ifs025');
+    if (!rows.length) return;
+
+    updateEcmwfTagsDOM(rows);
+  } catch (e) {
+    console.warn('ECMWF tags fetch:', e.message);
+  }
+}

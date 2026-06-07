@@ -375,20 +375,31 @@ function parseMetarWeather(rawOb) {
   return bestLabel || '--';
 }
 
+const metarUI = {};
+function getMetarUI() {
+  if (!metarUI.tempNow) {
+    ['tempNow','metarRaw','cfWeather','cfWind','cfMin','cfMax','metarUpd'].forEach((id) => {
+      metarUI[id] = document.getElementById(id);
+    });
+  }
+  return metarUI;
+}
+
 function updateMetarUI() {
   if (!metarToday.length) return;
   const latest = metarToday[metarToday.length - 1];
+  const ui = getMetarUI();
 
-  document.getElementById('tempNow').innerHTML = `${tempFromCelsius(latest.temp, observedTempOptions())}<span class="temp-unit">${tempUnitLabel()}</span>`;
-  document.getElementById('metarRaw').textContent = latest.rawOb;
-  document.getElementById('cfWeather').textContent = parseMetarWeather(latest.rawOb);
-  document.getElementById('cfWind').textContent =
+  ui.tempNow.innerHTML = `${tempFromCelsius(latest.temp, observedTempOptions())}<span class="temp-unit">${tempUnitLabel()}</span>`;
+  ui.metarRaw.textContent = latest.rawOb;
+  ui.cfWeather.textContent = parseMetarWeather(latest.rawOb);
+  ui.cfWind.textContent =
     (latest.wdir === 'VRB' ? 'VRB' : latest.wdir != null ? `${latest.wdir}\u00B0` : '--') +
     (latest.wspd != null ? ` ${latest.wspd}kt` : '');
 
   const temps = metarToday.map((item) => item.temp);
-  document.getElementById('cfMin').textContent = formatTempFromCelsius(Math.min(...temps), observedTempOptions());
-  document.getElementById('cfMax').textContent = formatTempFromCelsius(Math.max(...temps), observedTempOptions());
+  ui.cfMin.textContent = formatTempFromCelsius(Math.min(...temps), observedTempOptions());
+  ui.cfMax.textContent = formatTempFromCelsius(Math.max(...temps), observedTempOptions());
 }
 
 function cityTimeParts(date) {
@@ -413,16 +424,27 @@ function currentCityHourFrac() {
   return parseInt(parts.hour, 10) + parseInt(parts.minute, 10) / 60 + parseInt(parts.second, 10) / 3600;
 }
 
+let cachedCanvasW, cachedCanvasH;
 function drawChart() {
   const canvas = document.getElementById('tempChart');
   const wrap = canvas.parentElement;
   const dpr = window.devicePixelRatio || 1;
   const width = wrap.clientWidth;
   const height = wrap.clientHeight;
-  canvas.width = width * dpr;
-  canvas.height = height * dpr;
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
+
+  if (width !== cachedCanvasW || height !== cachedCanvasH) {
+    cachedCanvasW = width;
+    cachedCanvasH = height;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    const overlay = document.getElementById('tempChartOverlay');
+    overlay.width = width * dpr;
+    overlay.height = height * dpr;
+    overlay.style.width = `${width}px`;
+    overlay.style.height = `${height}px`;
+  }
 
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
@@ -658,12 +680,6 @@ function drawChart() {
     ctx.textAlign = latestX > width - pad.right - 40 ? 'right' : 'left';
     ctx.fillText(`${latestDisplay}${tempUnitLabel()}`, latestX + (ctx.textAlign === 'left' ? 6 : -6), latestY - 6);
   }
-
-  const overlay = document.getElementById('tempChartOverlay');
-  overlay.width = width * dpr;
-  overlay.height = height * dpr;
-  overlay.style.width = `${width}px`;
-  overlay.style.height = `${height}px`;
 
   chartState = { PAD: pad, cW: chartWidth, cH: chartHeight, W: width, H: height, xOfHr, yOf, dpr, forecastRows, observedToday };
 }

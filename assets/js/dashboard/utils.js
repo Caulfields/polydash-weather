@@ -31,8 +31,9 @@ function fmtMetarAge(ts) {
   return `updated ${minutes} minute${minutes === 1 ? '' : 's'} ago`;
 }
 
+let cachedTimeNode;
 function tickCityClock() {
-  const timeNode = document.getElementById('londonTime');
+  const timeNode = cachedTimeNode || (cachedTimeNode = document.getElementById('londonTime'));
   if (!timeNode) return;
   const time = new Date().toLocaleTimeString('en-GB', {
     timeZone: activeCity.timezone,
@@ -43,8 +44,10 @@ function tickCityClock() {
   timeNode.textContent = `${time} ${activeCity.name}`;
 }
 
-setInterval(() => {
+let cachedMetarUpd;
+let metarAgeInterval = setInterval(() => {
   if (metarObsTime) {
-    document.getElementById('metarUpd').textContent = fmtMetarAge(metarObsTime);
+    if (!cachedMetarUpd) cachedMetarUpd = document.getElementById('metarUpd');
+    if (cachedMetarUpd) cachedMetarUpd.textContent = fmtMetarAge(metarObsTime);
   }
 }, 30000);
