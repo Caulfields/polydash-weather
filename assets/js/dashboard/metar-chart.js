@@ -27,6 +27,7 @@ function getForecastRows() {
       rainProb: row.rainProb,
       windSpeed: row.windSpeed,
       windDir: row.windDir,
+      weatherCode: row.weatherCode,
       label: row.label,
       sourceLabel: hourlyOmState.sourceLabel || activeCity.omSourceLabel || 'Open-Meteo',
     }));

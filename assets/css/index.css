@@ -31,7 +31,8 @@ h1, h2 {
 
 .eyebrow,
 .current-time,
-.metar-updated {
+.metar-updated,
+.model-updated {
   color: var(--dim);
 }
 
@@ -110,7 +111,7 @@ h1, h2 {
 .current-meta {
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(4, minmax(100px, 1fr));
+  grid-template-columns: repeat(5, minmax(100px, 1fr));
   gap: 12px;
 }
 
@@ -147,6 +148,12 @@ h1, h2 {
 }
 
 .metar-updated {
+  align-self: end;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.model-updated {
   align-self: end;
   font-size: 11px;
   white-space: nowrap;

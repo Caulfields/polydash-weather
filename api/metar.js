@@ -59,7 +59,7 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const hoursRaw = parseInt(req.query.hours) || 48;
+  const hoursRaw = parseInt(req.query.hours) || 24;
   const hours    = Math.min(Math.max(hoursRaw, 1), 168);
   const cacheKey = `${station}_${hours}`;
 

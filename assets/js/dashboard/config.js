@@ -2,6 +2,40 @@ const METAR_REFRESH_MS = 15 * 60 * 1000;
 const METAR_CACHE_TTL_MS = 15 * 60 * 1000;
 const OM_REFRESH_MS = 15 * 60 * 1000;
 
+const MODEL_UPDATE_HOURS = {
+  auto: 1,
+  ecmwf_ifs: 12,
+  ecmwf_ifs025: 6,
+  ecmwf_aifs025_single: 12,
+  cma_grapes_global: 6,
+  gfs_seamless: 1,
+  gfs_global: 6,
+  jma_seamless: 3,
+  jma_gsm: 3,
+  icon_seamless: 1,
+  icon_global: 3,
+  icon_eu: 3,
+  icon_d2: 1,
+  gem_seamless: 6,
+  gem_global: 6,
+  meteofrance_seamless: 1,
+  meteofrance_arpege_world: 6,
+  meteofrance_arpege_europe: 6,
+  meteofrance_arome_france: 1,
+  meteofrance_arome_france_hd: 1,
+  metno_seamless: 1,
+  knmi_seamless: 1,
+  knmi_harmonie_arome_europe: 1,
+  knmi_harmonie_arome_netherlands: 1,
+  dmi_seamless: 3,
+  dmi_harmonie_arome_europe: 3,
+  ukmo_seamless: 1,
+  ukmo_global_deterministic_10km: 6,
+  ukmo_uk_deterministic_2km: 1,
+  geosphere_seamless: 1,
+  geosphere_arome_austria: 1,
+};
+
 const WEATHER_MODELS = {
   auto: 'Best match',
   ecmwf_ifs: 'ECMWF IFS HRES',
