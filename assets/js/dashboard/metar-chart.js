@@ -290,7 +290,7 @@ async function loadMetar() {
     };
     if (!isTodayForecastSelected()) return;
 
-    document.getElementById('chartTitle').textContent = `${activeCity.metar} Temperature ${forecastDayLabel()}`;
+    document.getElementById('chartTitle').textContent = `${activeCity.metar}`;
     updateMetarUI();
     drawChart();
     document.getElementById('metarUpd').textContent = fmtMetarAge(metarObsTime);

@@ -41,6 +41,7 @@ function parseHourlyRows(hourly, dateKey, modelId) {
   const rainProb = hourlyField(hourly, 'precipitation_probability', modelId);
   const windSpeed = hourlyField(hourly, 'wind_speed_10m', modelId);
   const windDir = hourlyField(hourly, 'wind_direction_10m', modelId);
+  const cloudCover = hourlyField(hourly, 'cloud_cover', modelId);
 
   return times
     .map((time, index) => {
@@ -60,6 +61,7 @@ function parseHourlyRows(hourly, dateKey, modelId) {
         rainProb: typeof rainProb[index] === 'number' ? rainProb[index] : null,
         windSpeed: typeof windSpeed[index] === 'number' ? windSpeed[index] : null,
         windDir: typeof windDir[index] === 'number' ? windDir[index] : null,
+        cloudCover: typeof cloudCover[index] === 'number' ? cloudCover[index] : null,
       };
     })
     .filter(Boolean);
@@ -149,6 +151,7 @@ async function fetchOpenMeteo() {
       omData = null;
       document.getElementById('omLoading').style.display = 'none';
       drawChart();
+      updateForecastMaxTemp();
       if (isTodayForecastSelected()) tryReuseEcmwfTags(hourlyOmState.rows);
       return;
     }
@@ -164,6 +167,7 @@ async function fetchOpenMeteo() {
       omData = null;
       document.getElementById('omLoading').style.display = 'none';
       drawChart();
+      updateForecastMaxTemp();
       if (isTodayForecastSelected()) tryReuseEcmwfTags(hourlyOmState.rows);
       return;
     }
@@ -180,7 +184,8 @@ async function fetchOpenMeteo() {
     document.getElementById('omLoading').style.display = 'none';
     setOmHeader();
     drawChart();
-    if (isTodayForecastSelected() && requestModel === 'ecmwf_ifs025') {
+    updateForecastMaxTemp();
+    if (requestModel === 'ecmwf_ifs025') {
       updateEcmwfTagsDOM(hourlyOmState.rows);
     }
   } catch (error) {
@@ -203,7 +208,7 @@ window.addEventListener('resize', () => {
 });
 
 function tryReuseEcmwfTags(rows) {
-  if (activeForecastModel === 'ecmwf_ifs025' && isTodayForecastSelected()) {
+  if (activeForecastModel === 'ecmwf_ifs025') {
     updateEcmwfTagsDOM(rows);
   }
 }
@@ -211,12 +216,16 @@ function tryReuseEcmwfTags(rows) {
 function updateEcmwfTagsDOM(rows) {
   const tagWind = document.getElementById('tagWind');
   const tagRain = document.getElementById('tagRain');
-  if (!tagWind || !tagRain) return;
+  const tagCloud = document.getElementById('tagCloud');
+  if (!tagWind || !tagRain || !tagCloud) return;
   tagWind.style.display = 'none';
   tagRain.style.display = 'none';
+  tagCloud.style.display = 'none';
+  tagCloud.textContent = '';
 
   const hasStrongWind = rows.some((row) => row.windSpeed != null && row.windSpeed > 10 && row.hourFrac >= 8);
   const hasRain = rows.some((row) => row.rain != null && row.rain > 0);
+  const avgCloud = rows.reduce((sum, r) => sum + (r.cloudCover || 0), 0) / rows.length;
 
   if (hasStrongWind) {
     tagWind.style.display = '';
@@ -226,23 +235,42 @@ function updateEcmwfTagsDOM(rows) {
     tagRain.style.display = '';
     tagRain.className = 'weather-tag rain';
   }
+  if (avgCloud > 0) {
+    tagCloud.style.display = '';
+    tagCloud.className = 'weather-tag cloud';
+    tagCloud.textContent = `${Math.round(avgCloud)}% cloud`;
+  }
+}
+
+function updateForecastMaxTemp() {
+  const el = document.getElementById('forecastMaxTemp');
+  if (!el) return;
+  if (!hourlyOmState?.rows?.length) {
+    el.textContent = '';
+    return;
+  }
+  const maxTemp = Math.max(...hourlyOmState.rows.map((r) => r.temp));
+  el.textContent = formatTempFromCelsius(maxTemp, { decimals: 1 });
 }
 
 async function fetchEcmwfTags() {
   const tagWind = document.getElementById('tagWind');
   const tagRain = document.getElementById('tagRain');
-  if (!tagWind || !tagRain) return;
+  const tagCloud = document.getElementById('tagCloud');
+  if (!tagWind || !tagRain || !tagCloud) return;
 
-  if (isTodayForecastSelected() && activeForecastModel === 'ecmwf_ifs025' && hourlyOmState?.rows?.length) {
+  if (activeForecastModel === 'ecmwf_ifs025' && hourlyOmState?.rows?.length) {
     updateEcmwfTagsDOM(hourlyOmState.rows);
     return;
   }
 
   tagWind.style.display = 'none';
   tagRain.style.display = 'none';
+  tagCloud.style.display = 'none';
+  tagCloud.textContent = '';
 
   const requestCityId = activeCity.id;
-  const dateKey = cityTodayKey(activeCity.timezone);
+  const dateKey = activeForecastDateKey(activeCity.timezone);
   const params = new URLSearchParams({
     station: activeCity.metar,
     model: 'ecmwf_ifs025',

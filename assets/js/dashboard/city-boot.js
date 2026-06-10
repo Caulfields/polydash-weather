@@ -18,6 +18,10 @@ let averagedModelsById = {};
 let rankedCityId = null;
 let rankingRunId = 0;
 
+function allModelIds() {
+  return Object.keys(WEATHER_MODELS).filter((id) => id !== 'auto');
+}
+
 function loadStoredCityIdSet(storageKey) {
   try {
     const raw = localStorage.getItem(storageKey);
@@ -223,6 +227,7 @@ function saveLocationNotesOpen() {
 }
 
 function cityRegionClass(city) {
+  if (city.id === 'telaviv' || city.id === 'jeddah' || city.id === 'capetown') return ' city-region-europe';
   if (city.metar?.startsWith('K')) return ' city-region-usa';
   if (city.timezone?.startsWith('Europe/')) return ' city-region-europe';
   if (city.timezone?.startsWith('Asia/')) return ' city-region-asia';
@@ -230,6 +235,7 @@ function cityRegionClass(city) {
 }
 
 function cityRegionRank(city) {
+  if (city.id === 'telaviv' || city.id === 'jeddah' || city.id === 'capetown') return 1;
   if (city.timezone?.startsWith('Asia/')) return 0;
   if (city.timezone?.startsWith('Europe/')) return 1;
   if (city.metar?.startsWith('K')) return 3;
@@ -332,7 +338,7 @@ function setCityChrome(options = {}) {
   const stationLabel = document.getElementById('stationLabel');
   if (pageTitle) pageTitle.textContent = `${activeCity.name} Weather`;
   if (stationLabel) stationLabel.textContent = `${activeCity.metar} · ${activeCity.airport}`;
-  document.getElementById('chartTitle').textContent = `${activeCity.metar} Temperature ${forecastDayLabel()}`;
+  document.getElementById('chartTitle').textContent = `${activeCity.metar}`;
   if (resetObservations) {
     document.getElementById('tempNow').innerHTML = `--<span class="temp-unit">${tempUnitLabel()}</span>`;
     document.getElementById('metarRaw').textContent = isTodayForecastSelected() ? 'loading...' : 'METAR is today-only';
@@ -682,8 +688,7 @@ async function rankForecastModels() {
   const runId = ++rankingRunId;
   const runCityId = activeCity.id;
   const status = document.getElementById('modelRankStatus');
-  const baseOptions = activeCity.modelOptions?.length ? activeCity.modelOptions : US_MODELS.slice(0, 10);
-  const candidates = baseOptions.slice(0, baseOptions.length >= 20 ? 20 : 10);
+  const candidates = allModelIds();
 
   setRankingButtonsDisabled(true);
   if (status) status.textContent = 'Loading observations...';
@@ -735,8 +740,7 @@ async function rankForecastModelAverages() {
   const runId = ++rankingRunId;
   const runCityId = activeCity.id;
   const status = document.getElementById('modelRankStatus');
-  const baseOptions = activeCity.modelOptions?.length ? activeCity.modelOptions : US_MODELS.slice(0, 10);
-  const candidates = baseOptions.slice(0, baseOptions.length >= 20 ? 20 : 10);
+  const candidates = allModelIds();
 
   rankedModelIds = [];
   modelScoresById = {};
@@ -855,8 +859,7 @@ async function rankForecastModelsFromEight() {
   const runId = ++rankingRunId;
   const runCityId = activeCity.id;
   const status = document.getElementById('modelRankStatus');
-  const baseOptions = activeCity.modelOptions?.length ? activeCity.modelOptions : US_MODELS.slice(0, 10);
-  const candidates = baseOptions.slice(0, baseOptions.length >= 20 ? 20 : 10);
+  const candidates = allModelIds();
 
   setRankingButtonsDisabled(true);
   if (status) status.textContent = 'Loading observations from 08:00...';
@@ -909,8 +912,7 @@ async function rankForecastModelAveragesFromEight() {
   const runId = ++rankingRunId;
   const runCityId = activeCity.id;
   const status = document.getElementById('modelRankStatus');
-  const baseOptions = activeCity.modelOptions?.length ? activeCity.modelOptions : US_MODELS.slice(0, 10);
-  const candidates = baseOptions.slice(0, baseOptions.length >= 20 ? 20 : 10);
+  const candidates = allModelIds();
 
   rankedModelIds = [];
   modelScoresById = {};
@@ -1042,6 +1044,7 @@ function selectForecastModel(modelId) {
   document.getElementById('omLoading').style.display = '';
   document.getElementById('omLoading').textContent = 'Loading...';
   drawChart();
+  if (averaged?.rows?.length) updateForecastMaxTemp();
   if (averaged?.rows?.length) {
     document.getElementById('omLoading').style.display = 'none';
     setOmHeader();
@@ -1053,6 +1056,7 @@ function selectForecastModel(modelId) {
 function setForecastDay(day) {
   const nextDay = day === 'tomorrow' ? 'tomorrow' : 'today';
   if (activeForecastDay === nextDay) return;
+  clearWeatherTags();
   activeForecastDay = nextDay;
   rankingRunId += 1;
   rankedModelIds = [];
@@ -1067,10 +1071,26 @@ function setForecastDay(day) {
   drawChart();
   if (isTodayForecastSelected()) loadMetar().catch(console.error);
   fetchOpenMeteo().catch(console.error);
+  fetchEcmwfTags();
+}
+
+function clearWeatherTags() {
+  const w = document.getElementById('tagWind');
+  const r = document.getElementById('tagRain');
+  const c = document.getElementById('tagCloud');
+  if (w) w.style.display = 'none';
+  if (r) r.style.display = 'none';
+  if (c) c.style.display = 'none';
+}
+
+function toggleMetarRaw() {
+  const el = document.getElementById('metarRaw');
+  if (el) el.classList.toggle('visible');
 }
 
 function switchCity(cityId) {
   if (!CITIES[cityId] || activeCity.id === cityId) return;
+  clearWeatherTags();
 
   activeCity = CITIES[cityId];
   resetModelRanking();

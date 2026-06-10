@@ -3,10 +3,29 @@
 const express = require('express');
 const https = require('https');
 const path = require('path');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 const { STATIONS, normalizeStation } = require('./data/weather-stations');
 const { resolveCity, rankTemperature } = require('./lib/weather-ranking');
 const { buildSingleWeatherResponse, buildBatchWeatherResponse } = require('./lib/bot-weather');
 const { fetchForecast } = require('./lib/open-meteo');
+
+function getSystemProxy() {
+  const env = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
+  if (env) return env;
+  try {
+    const reg = require('child_process').execSync(
+      'reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyServer',
+      { encoding: 'utf-8', timeout: 2000 }
+    );
+    const match = reg.match(/ProxyServer\s+REG_SZ\s+(\S+)/);
+    if (match) return 'http://' + match[1];
+  } catch {}
+  return null;
+}
+
+const proxyUrl = getSystemProxy();
+const proxyAgent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : null;
+if (proxyAgent) console.log('Proxy for Open-Meteo:', proxyUrl);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,7 +42,13 @@ const forecastInflight = new Map();
 
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': 'weather-dashboard/1.0' } }, (res) => {
+    const opts = {
+      headers: { 'User-Agent': 'weather-dashboard/1.0' },
+    };
+    if (proxyAgent && url.startsWith('https://api.open-meteo.com/')) {
+      opts.agent = proxyAgent;
+    }
+    https.get(url, opts, (res) => {
       let body = '';
       res.on('data', (chunk) => body += chunk);
       res.on('end', () => {

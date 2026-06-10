@@ -1,21 +1,17 @@
-const METAR_REFRESH_MS = 30 * 60 * 1000;
-const METAR_CACHE_TTL_MS = 30 * 60 * 1000;
+const METAR_REFRESH_MS = 15 * 60 * 1000;
+const METAR_CACHE_TTL_MS = 15 * 60 * 1000;
 const OM_REFRESH_MS = 15 * 60 * 1000;
 
 const WEATHER_MODELS = {
   auto: 'Best match',
-  ecmwf_ifs04: 'ECMWF IFS HRES',
+  ecmwf_ifs: 'ECMWF IFS HRES',
   ecmwf_ifs025: 'ECMWF IFS 0.25',
   ecmwf_aifs025_single: 'ECMWF AIFS',
   cma_grapes_global: 'CMA GRAPES',
-  bom_access_global: 'BOM ACCESS-G',
   gfs_seamless: 'GFS Seamless',
   gfs_global: 'GFS Global',
-  gfs_graphcast025: 'GFS GraphCast',
   jma_seamless: 'JMA Seamless',
   jma_gsm: 'JMA GSM',
-  kma_seamless: 'KMA Seamless',
-  kma_gdps: 'KMA GDPS',
   icon_seamless: 'ICON Seamless',
   icon_global: 'ICON Global',
   icon_eu: 'ICON EU',
@@ -45,7 +41,7 @@ const EUROPE_MODELS = [
   'ukmo_seamless',
   'ukmo_global_deterministic_10km',
   'ukmo_uk_deterministic_2km',
-  'ecmwf_ifs04',
+  'ecmwf_ifs',
   'ecmwf_ifs025',
   'ecmwf_aifs025_single',
   'icon_seamless',
@@ -54,7 +50,6 @@ const EUROPE_MODELS = [
   'icon_d2',
   'gfs_seamless',
   'gfs_global',
-  'gfs_graphcast025',
   'meteofrance_seamless',
   'meteofrance_arpege_world',
   'meteofrance_arpege_europe',
@@ -66,19 +61,15 @@ const EUROPE_MODELS = [
 const ASIA_MODELS = [
   'auto',
   'cma_grapes_global',
-  'ecmwf_ifs04',
+  'ecmwf_ifs',
   'ecmwf_ifs025',
   'ecmwf_aifs025_single',
   'gfs_seamless',
   'gfs_global',
-  'gfs_graphcast025',
   'jma_seamless',
   'jma_gsm',
-  'kma_seamless',
-  'kma_gdps',
   'icon_seamless',
   'icon_global',
-  'bom_access_global',
   'gem_global',
   'gem_seamless',
   'ukmo_global_deterministic_10km',
@@ -90,8 +81,7 @@ const US_MODELS = [
   'auto',
   'gfs_seamless',
   'gfs_global',
-  'gfs_graphcast025',
-  'ecmwf_ifs04',
+  'ecmwf_ifs',
   'ecmwf_ifs025',
   'ecmwf_aifs025_single',
   'gem_seamless',
@@ -100,11 +90,8 @@ const US_MODELS = [
   'icon_global',
   'ukmo_global_deterministic_10km',
   'cma_grapes_global',
-  'bom_access_global',
   'jma_seamless',
   'jma_gsm',
-  'kma_seamless',
-  'kma_gdps',
   'meteofrance_arpege_world',
   'geosphere_seamless',
 ];
@@ -187,7 +174,6 @@ const CITIES = {
     modelOptions: US_MODELS,
   },
   warsaw: cityConfig('warsaw', 'Warsaw', 'EPWA', 52.1657, 20.9671, 'Europe/Warsaw', EUROPE_MODELS, 'EU'),
-  jakarta: cityConfig('jakarta', 'Jakarta', 'WIHH', -6.2666, 106.8911, 'Asia/Jakarta', ASIA_MODELS, 'BMKG'),
   munich: cityConfig('munich', 'Munich', 'EDDM', 48.3538, 11.7861, 'Europe/Berlin', EUROPE_MODELS, 'DWD'),
   atlanta: usCityConfig('atlanta', 'Atlanta', 'KATL', 33.6367, -84.4281, 'America/New_York'),
   amsterdam: cityConfig('amsterdam', 'Amsterdam', 'EHAM', 52.3105, 4.7683, 'Europe/Amsterdam', EUROPE_MODELS, 'KNMI'),
@@ -196,7 +182,6 @@ const CITIES = {
   istanbul: cityConfig('istanbul', 'Istanbul', 'LTFM', 41.2753, 28.7519, 'Europe/Istanbul', EUROPE_MODELS, 'EU'),
   kualalumpur: cityConfig('kualalumpur', 'Kuala Lumpur', 'WMKK', 2.7456, 101.7072, 'Asia/Kuala_Lumpur', ASIA_MODELS, 'MSS'),
   wuhan: cityConfig('wuhan', 'Wuhan', 'ZHHH', 30.7838, 114.2081, 'Asia/Shanghai', ASIA_MODELS, 'CMA'),
-  lagos: cityConfig('lagos', 'Lagos', 'DNMM', 6.5774, 3.3212, 'Africa/Lagos', EUROPE_MODELS, 'GFS'),
   losangeles: usCityConfig('losangeles', 'Los Angeles', 'KLAX', 33.9416, -118.4085, 'America/Los_Angeles'),
   guangzhou: cityConfig('guangzhou', 'Guangzhou', 'ZGGG', 23.3924, 113.2988, 'Asia/Shanghai', ASIA_MODELS, 'CMA'),
   lucknow: cityConfig('lucknow', 'Lucknow', 'VILK', 26.7606, 80.8893, 'Asia/Kolkata', ASIA_MODELS, 'GFS'),
@@ -215,7 +200,7 @@ const CITIES = {
   shenzhen: cityConfig('shenzhen', 'Shenzhen', 'ZGSZ', 22.6395, 113.8033, 'Asia/Shanghai', ASIA_MODELS, 'CMA'),
   chicago: usCityConfig('chicago', 'Chicago', 'KORD', 41.9769, -87.9081, 'America/Chicago'),
   helsinki: cityConfig('helsinki', 'Helsinki', 'EFHK', 60.3184, 24.9633, 'Europe/Helsinki', EUROPE_MODELS, 'EU'),
-  jeddah: cityConfig('jeddah', 'Jeddah', 'OEJN', 21.6802, 39.1574, 'Asia/Riyadh', ASIA_MODELS, 'GFS'),
+  jeddah: cityConfig('jeddah', 'Jeddah', 'OEJN', 21.6802, 39.1574, 'Asia/Riyadh', EUROPE_MODELS, 'GFS'),
   houston: usCityConfig('houston', 'Houston', 'KHOU', 29.6458, -95.2772, 'America/Chicago'),
   karachi: cityConfig('karachi', 'Karachi', 'OPKC', 24.9065, 67.1608, 'Asia/Karachi', ASIA_MODELS, 'GFS'),
   panamacity: cityConfig('panamacity', 'Panama City', 'MPMG', 8.9733, -79.5556, 'America/Panama', US_MODELS, 'GFS'),
@@ -257,7 +242,6 @@ let omData = null;
 let omMode = 'best';
 let hourlyOmState = null;
 let temperatureHighlight = null;
-
 if (typeof module !== 'undefined') {
   module.exports = {
     WEATHER_MODELS,

@@ -180,14 +180,38 @@ h1, h2 {
 }
 
 .metar-raw {
-  max-width: 52vw;
-  margin-left: auto;
+  display: none;
+  max-width: 20vw;
   overflow: hidden;
   color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.metar-raw.visible {
+  display: inline;
+}
+
+.metar-toggle {
+  flex-shrink: 0;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 7px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
+
+.metar-toggle:hover {
+  border-color: rgba(249, 115, 22, 0.55);
+  color: var(--text);
 }
 
 .weather-tag {
@@ -210,6 +234,13 @@ h1, h2 {
 .weather-tag.rain {
   color: #60a5fa;
   background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.25);
+}
+
+.weather-tag.cloud {
+  color: #9ca3af;
+  background: rgba(156, 163, 175, 0.12);
+  border: 1px solid rgba(156, 163, 175, 0.25);
   border: 1px solid rgba(96, 165, 250, 0.25);
 }
 
@@ -339,7 +370,6 @@ canvas#tempChartOverlay {
 }
 
 .source-badge {
-  margin-left: auto;
   padding: 2px 7px;
   border-radius: 4px;
   background: rgba(96, 165, 250, 0.14);
@@ -347,6 +377,15 @@ canvas#tempChartOverlay {
   font-size: 10px;
   font-weight: 800;
 }
+
+.forecast-max-temp {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--orange);
+  white-space: nowrap;
+}
+
 
 .forecast-day-switch {
   display: inline-flex;

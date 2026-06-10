@@ -15,8 +15,7 @@
   <main class="weather-layout">
     <section class="weather-panel">
       <div class="current-strip">
-        <div>
-          <span class="eyebrow">Observed now</span>
+        <div style="text-align:center">
           <div class="temp-now" id="tempNow">--<span class="temp-unit">°C</span></div>
         </div>
         <div class="current-meta">
@@ -46,16 +45,19 @@
       <div class="chart-section">
         <div class="section-header">
           <div>
-            <span class="eyebrow">Observed and forecast</span>
-            <h2 id="chartTitle">ZBAA Temperature Today</h2>
+            <span class="eyebrow">Forecast</span>
+            <h2 id="chartTitle">ZBAA</h2>
           </div>
           <div class="forecast-day-switch" id="forecastDaySwitch" aria-label="Forecast day">
             <button class="forecast-day-btn active" id="forecastDayToday" type="button" aria-pressed="true" onclick="setForecastDay('today')">Today</button>
             <button class="forecast-day-btn" id="forecastDayTomorrow" type="button" aria-pressed="false" onclick="setForecastDay('tomorrow')">Tomorrow</button>
           </div>
+          <button class="metar-toggle" id="metarToggle" type="button" onclick="toggleMetarRaw()" title="Toggle METAR">METAR</button>
           <span class="metar-raw" id="metarRaw">loading...</span>
+          <span class="forecast-max-temp" id="forecastMaxTemp"></span>
           <span class="weather-tag" id="tagWind" style="display:none">Strong wind</span>
           <span class="weather-tag" id="tagRain" style="display:none">Rain</span>
+          <span class="weather-tag" id="tagCloud" style="display:none"></span>
           <span class="source-badge" id="omBadge">OM</span>
           <div class="om-switch" id="omSwitch">
             <button class="om-mode-btn active" id="omModeBest" type="button" onclick="setOmMode('best')">Best</button>
@@ -116,10 +118,6 @@
     </section>
 
     <aside class="city-panel" aria-label="City selection">
-      <div class="city-panel-header">
-        <span class="eyebrow">Cities</span>
-        <h2>Switch location</h2>
-      </div>
       <div class="city-search-wrap">
         <input class="city-search" id="citySearch" type="search" placeholder="Search city or code" autocomplete="off" />
       </div>

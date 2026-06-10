@@ -1,7 +1,7 @@
 // METAR proxy with short in-memory cache and in-flight request reuse.
 const { STATIONS, normalizeStation } = require('../data/weather-stations');
 
-const METAR_TTL_MS = 30 * 60_000;
+const METAR_TTL_MS = 15 * 60_000;
 const metarCache = new Map();
 const metarInflight = new Map();
 
