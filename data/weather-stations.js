@@ -33,6 +33,7 @@ const STATIONS = {
   FACT: { lat: -33.9648, lon: 18.6017, timezone: 'Africa/Johannesburg' },
   LLBG: { lat: 32.0114, lon: 34.8867, timezone: 'Asia/Jerusalem' },
   RPLL: { lat: 14.5086, lon: 121.0198, timezone: 'Asia/Manila' },
+  RJTT: { lat: 35.5533, lon: 139.7811, timezone: 'Asia/Tokyo' },
   ZSQD: { lat: 36.3619, lon: 120.0885, timezone: 'Asia/Shanghai' },
   KSFO: { lat: 37.6213, lon: -122.379, timezone: 'America/Los_Angeles' },
   KBKF: { lat: 39.7017, lon: -104.7517, timezone: 'America/Denver' },
