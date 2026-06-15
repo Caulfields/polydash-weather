@@ -28,6 +28,7 @@ function getForecastRows() {
       windSpeed: row.windSpeed,
       windDir: row.windDir,
       weatherCode: row.weatherCode,
+      cloudCover: row.cloudCover,
       label: row.label,
       sourceLabel: hourlyOmState.sourceLabel || activeCity.omSourceLabel || 'Open-Meteo',
     }));
@@ -801,11 +802,20 @@ function setupChartMouse() {
     document.getElementById('ttForecastTemp').textContent = forecastCandidate
       ? formatTempFromCelsius(forecastCandidate.temp, { decimals: 1 })
       : '--';
-    document.getElementById('ttForecastNote').textContent = forecastCandidate
-      ? (forecastCandidate.rain > 0
-        ? `${forecastCandidate.rain.toFixed(1)} mm rain · ${forecastCandidate.sourceLabel}`
-        : forecastCandidate.sourceLabel)
-      : 'no forecast point near this time';
+    const forecastNoteEl = document.getElementById('ttForecastNote');
+    if (forecastCandidate) {
+      const cloudText = typeof forecastCandidate.cloudCover === 'number'
+        ? `Cloud ${Math.round(forecastCandidate.cloudCover)}%`
+        : null;
+      const rainText = forecastCandidate.rain > 0
+        ? `${forecastCandidate.rain.toFixed(1)} mm rain`
+        : null;
+      const tail = forecastCandidate.sourceLabel;
+      const parts = [cloudText, rainText, tail].filter(Boolean);
+      forecastNoteEl.textContent = parts.join(' · ');
+    } else {
+      forecastNoteEl.textContent = 'no forecast point near this time';
+    }
 
     const metarWindRow = document.getElementById('ttMetarWindRow');
     const metarWindEl = document.getElementById('ttMetarWind');
