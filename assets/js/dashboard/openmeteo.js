@@ -42,6 +42,8 @@ function parseHourlyRows(hourly, dateKey, modelId) {
   const windSpeed = hourlyField(hourly, 'wind_speed_10m', modelId);
   const windDir = hourlyField(hourly, 'wind_direction_10m', modelId);
   const cloudCover = hourlyField(hourly, 'cloud_cover', modelId);
+  const cloudCoverLow = hourlyField(hourly, 'cloud_cover_low', modelId);
+  const shortwaveRadiation = hourlyField(hourly, 'shortwave_radiation', modelId);
   const weatherCode = hourlyField(hourly, 'weather_code', modelId);
 
   return times
@@ -63,6 +65,8 @@ function parseHourlyRows(hourly, dateKey, modelId) {
         windSpeed: typeof windSpeed[index] === 'number' ? windSpeed[index] : null,
         windDir: typeof windDir[index] === 'number' ? windDir[index] : null,
         cloudCover: typeof cloudCover[index] === 'number' ? cloudCover[index] : null,
+        cloudCoverLow: typeof cloudCoverLow[index] === 'number' ? cloudCoverLow[index] : null,
+        shortwaveRadiation: typeof shortwaveRadiation[index] === 'number' ? shortwaveRadiation[index] : null,
         weatherCode: typeof weatherCode[index] === 'number' ? weatherCode[index] : null,
       };
     })

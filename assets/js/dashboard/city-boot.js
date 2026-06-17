@@ -671,6 +671,9 @@ function averageForecastRows(combo) {
       rainProb: average('rainProb'),
       windSpeed: average('windSpeed'),
       windDir: averageDirection(rows.map((row) => row.windDir)),
+      cloudCover: average('cloudCover'),
+      cloudCoverLow: average('cloudCoverLow'),
+      shortwaveRadiation: average('shortwaveRadiation'),
       weatherCode: first.weatherCode ?? null,
     };
   }).filter((row) => typeof row.temp === 'number');

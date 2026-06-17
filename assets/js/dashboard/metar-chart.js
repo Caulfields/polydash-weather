@@ -29,6 +29,8 @@ function getForecastRows() {
       windDir: row.windDir,
       weatherCode: row.weatherCode,
       cloudCover: row.cloudCover,
+      cloudCoverLow: row.cloudCoverLow,
+      shortwaveRadiation: row.shortwaveRadiation,
       label: row.label,
       sourceLabel: hourlyOmState.sourceLabel || activeCity.omSourceLabel || 'Open-Meteo',
     }));
@@ -54,6 +56,9 @@ function getForecastRows() {
       windSpeed: typeof windSpeed[index] === 'number' ? windSpeed[index] : null,
       windDir: typeof windDir[index] === 'number' ? windDir[index] : null,
       label: time.substring(11, 16),
+      cloudCover: null,
+      cloudCoverLow: null,
+      shortwaveRadiation: null,
       sourceLabel: activeCity.omSourceLabel || 'Open-Meteo',
     };
   }).filter(Boolean);
@@ -807,11 +812,16 @@ function setupChartMouse() {
       const cloudText = typeof forecastCandidate.cloudCover === 'number'
         ? `Cloud ${Math.round(forecastCandidate.cloudCover)}%`
         : null;
-      const rainText = forecastCandidate.rain > 0
-        ? `${forecastCandidate.rain.toFixed(1)} mm rain`
+      const lowCloudText = typeof forecastCandidate.cloudCoverLow === 'number'
+        ? `L.c. ${Math.round(forecastCandidate.cloudCoverLow)}%`
         : null;
-      const tail = forecastCandidate.sourceLabel;
-      const parts = [cloudText, rainText, tail].filter(Boolean);
+      const solarText = typeof forecastCandidate.shortwaveRadiation === 'number' && forecastCandidate.shortwaveRadiation > 0
+        ? `${Math.round(forecastCandidate.shortwaveRadiation)} W/m²`
+        : null;
+      const rainText = forecastCandidate.rain > 0
+        ? `${forecastCandidate.rain.toFixed(1)} mm`
+        : null;
+      const parts = [cloudText, lowCloudText, solarText, rainText].filter(Boolean);
       forecastNoteEl.textContent = parts.join(' · ');
     } else {
       forecastNoteEl.textContent = 'no forecast point near this time';
