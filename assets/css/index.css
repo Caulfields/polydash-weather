@@ -462,6 +462,7 @@ canvas#tempChartOverlay {
   align-items: center;
   gap: 10px;
   padding: 0 16px 10px;
+  position: relative;
 }
 
 .temperature-finder {
@@ -1134,4 +1135,133 @@ canvas#tempChartOverlay {
   .temperature-finder-clear {
     width: 100%;
   }
+
+  .city-model-settings {
+    right: 8px;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 5px 8px;
+    max-width: calc(100vw - 16px);
+  }
+}
+
+/* Copy button styling */
+.copy-temp-button {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface2);
+  color: var(--dim);
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.copy-temp-button:hover {
+  border-color: rgba(249, 115, 22, 0.55);
+  color: var(--text);
+  background: rgba(249, 115, 22, 0.12);
+}
+.copy-temp-button.copied {
+  border-color: rgba(34, 197, 94, 0.65);
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.14);
+}
+
+/* Gear button styling */
+.rank-button.gear {
+  border-color: rgba(156, 163, 175, 0.45);
+  background: rgba(156, 163, 175, 0.1);
+  color: var(--dim);
+  padding: 0 8px;
+  font-size: 14px;
+  line-height: 1;
+}
+.rank-button.gear:hover:not(:disabled) {
+  border-color: rgba(156, 163, 175, 0.75);
+  background: rgba(156, 163, 175, 0.18);
+  color: var(--text);
+}
+
+/* City model settings panel - inline in model-tools */
+.city-model-settings {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+.city-model-settings-title {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.city-model-settings-title strong {
+  color: var(--orange);
+}
+.city-model-settings-select {
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface2);
+  color: var(--text);
+  outline: none;
+  padding: 0 6px;
+  font: inherit;
+  font-size: 11px;
+  min-width: 0;
+}
+.city-model-settings-select:focus {
+  border-color: rgba(249, 115, 22, 0.65);
+}
+.city-model-settings-save {
+  height: 26px;
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  border-radius: 5px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #bbf7d0;
+  cursor: pointer;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.city-model-settings-save:hover {
+  border-color: rgba(34, 197, 94, 0.8);
+  background: rgba(34, 197, 94, 0.18);
+}
+.city-model-settings-close {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.city-model-settings-close:hover {
+  color: var(--text);
+  background: var(--surface2);
 }

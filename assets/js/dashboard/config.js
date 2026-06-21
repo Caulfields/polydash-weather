@@ -1,6 +1,7 @@
 const METAR_REFRESH_MS = 15 * 60 * 1000;
 const METAR_CACHE_TTL_MS = 15 * 60 * 1000;
 const OM_REFRESH_MS = 15 * 60 * 1000;
+const CITY_MODEL_SETTINGS_STORAGE_KEY = 'polydash.cityModelSettings';
 
 const MODEL_UPDATE_HOURS = {
   auto: 1,
@@ -288,6 +289,8 @@ let omData = null;
 let omMode = 'best';
 let hourlyOmState = null;
 let temperatureHighlight = null;
+let cityModelSettings = {};
+let extraModelMaxTempC = null;
 if (typeof module !== 'undefined') {
   module.exports = {
     WEATHER_MODELS,

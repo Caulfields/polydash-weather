@@ -158,6 +158,7 @@ async function fetchOpenMeteo() {
       document.getElementById('omLoading').style.display = 'none';
       drawChart();
       updateForecastMaxTemp();
+      fetchExtraModelMaxTemp();
       updateWeatherCodeUI();
       fetchModelStatus();
       if (isTodayForecastSelected()) tryReuseEcmwfTags(hourlyOmState.rows);
@@ -176,6 +177,7 @@ async function fetchOpenMeteo() {
       document.getElementById('omLoading').style.display = 'none';
       drawChart();
       updateForecastMaxTemp();
+      fetchExtraModelMaxTemp();
       updateWeatherCodeUI();
       fetchModelStatus();
       if (isTodayForecastSelected()) tryReuseEcmwfTags(hourlyOmState.rows);
@@ -195,6 +197,7 @@ async function fetchOpenMeteo() {
     setOmHeader();
     drawChart();
     updateForecastMaxTemp();
+    fetchExtraModelMaxTemp();
     updateWeatherCodeUI();
     fetchModelStatus();
     if (requestModel === 'ecmwf_ifs025') {
@@ -264,12 +267,47 @@ function updateEcmwfTagsDOM(rows) {
 function updateForecastMaxTemp() {
   const el = document.getElementById('forecastMaxTemp');
   if (!el) return;
-  if (!hourlyOmState?.rows?.length) {
+  const rows = hourlyOmState?.rows;
+  if (!rows?.length) {
     el.textContent = '';
     return;
   }
-  const maxTemp = Math.max(...hourlyOmState.rows.map((r) => r.temp));
-  el.textContent = formatTempFromCelsius(maxTemp, { decimals: 1 });
+  const maxTemp = Math.max(...rows.map((r) => r.temp));
+  if (extraModelMaxTempC != null && Number.isFinite(extraModelMaxTempC)) {
+    el.textContent = `${formatTempFromCelsius(maxTemp, { decimals: 1 })} / ${formatTempFromCelsius(extraModelMaxTempC, { decimals: 1 })}`;
+  } else {
+    el.textContent = formatTempFromCelsius(maxTemp, { decimals: 1 });
+  }
+}
+
+async function fetchExtraModelMaxTemp() {
+  const settings = cityModelSettings[activeCity.id];
+  const extraModelId = settings?.extraModel;
+  extraModelMaxTempC = null;
+  if (!extraModelId || extraModelId === 'none' || extraModelId === activeForecastModel) {
+    updateForecastMaxTemp();
+    return;
+  }
+  const requestCityId = activeCity.id;
+  const requestModel = extraModelId;
+  try {
+    const params = new URLSearchParams({
+      station: activeCity.metar,
+      model: extraModelId,
+      date: activeForecastDateKey(activeCity.timezone),
+    });
+    const res = await fetch(`/api/forecast?${params.toString()}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (requestCityId !== activeCity.id || requestModel !== cityModelSettings[activeCity.id]?.extraModel) return;
+    const rows = parseHourlyRows(data.hourly || {}, activeForecastDateKey(activeCity.timezone), extraModelId);
+    if (rows.length) {
+      extraModelMaxTempC = Math.max(...rows.map((r) => r.temp));
+    }
+  } catch (e) {
+    console.warn('Extra model fetch:', e.message);
+  }
+  updateForecastMaxTemp();
 }
 
 const WMO_WEATHER_CODES = {

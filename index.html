@@ -59,6 +59,7 @@
           </div>
           <button class="metar-toggle" id="metarToggle" type="button" onclick="toggleMetarRaw()" title="Toggle METAR">METAR</button>
           <span class="metar-raw" id="metarRaw">loading...</span>
+          <button class="copy-temp-button" id="copyTempBtn" type="button" onclick="copyForecastMaxTemp()" title="Copy max temp">📋</button>
           <span class="forecast-max-temp" id="forecastMaxTemp"></span>
           <span class="weather-tag" id="tagWind" style="display:none">Strong wind</span>
           <span class="weather-tag" id="tagRain" style="display:none">Rain</span>
@@ -95,12 +96,18 @@
         <div class="legend-wrap" id="chartLegend"></div>
         <div class="om-loading" id="omLoading">Loading...</div>
         <div class="model-tools">
-          <button class="rank-button" id="modelRankBtn" type="button" onclick="rankForecastModels()">Find best model</button>
-          <button class="rank-button combo" id="modelComboRankBtn" type="button" onclick="rankForecastModelAverages()">Find best average</button>
           <button class="rank-button save-average" id="modelSaveAverageBtn" type="button" onclick="saveLatestAverageModel()">Save average</button>
           <button class="rank-button daytime" id="modelRankDayBtn" type="button" onclick="rankForecastModelsFromEight()">Best model from 08</button>
           <button class="rank-button daytime combo" id="modelComboRankDayBtn" type="button" onclick="rankForecastModelAveragesFromEight()">Best average from 08</button>
+          <button class="rank-button daytime combo gear" id="modelSettingsBtn" type="button" onclick="openCityModelSettings()" title="Model settings">⚙</button>
           <span class="rank-status" id="modelRankStatus"></span>
+          <div class="city-model-settings" id="cityModelSettingsPanel" style="display:none">
+            <span class="city-model-settings-title">Settings for <strong id="settingsCityName"></strong></span>
+            <select class="city-model-settings-select" id="settingsMainModel" aria-label="Main model"></select>
+            <select class="city-model-settings-select" id="settingsExtraModel" aria-label="Additional model"></select>
+            <button class="city-model-settings-save" type="button" onclick="saveCityModelSettings()">Save</button>
+            <button class="city-model-settings-close" type="button" onclick="closeCityModelSettings()">✕</button>
+          </div>
         </div>
         <div class="temperature-finder">
           <div class="active-city-list-controls" id="activeCityListControls" aria-label="Active city lists"></div>
@@ -109,6 +116,7 @@
           <span class="temperature-finder-status" id="targetTempStatus"></span>
         </div>
         <div class="model-dock" id="modelDock"></div>
+
       </div>
 
       <div class="location-notes" id="locationNotes">

@@ -226,6 +226,28 @@ function saveLocationNotesOpen() {
   localStorage.setItem(CITY_NOTES_OPEN_STORAGE_KEY, `${locationNotesOpen}`);
 }
 
+function loadCityModelSettings() {
+  try {
+    const raw = localStorage.getItem(CITY_MODEL_SETTINGS_STORAGE_KEY);
+    const parsed = JSON.parse(raw || '{}');
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter(([cityId, val]) => CITIES[cityId] && val && typeof val === 'object')
+        .map(([cityId, val]) => [cityId, {
+          mainModel: (val.mainModel && WEATHER_MODELS[val.mainModel]) ? val.mainModel : null,
+          extraModel: (val.extraModel && WEATHER_MODELS[val.extraModel]) ? val.extraModel : null,
+        }])
+    );
+  } catch (error) {
+    return {};
+  }
+}
+
+function saveCityModelSettingsToStorage() {
+  localStorage.setItem(CITY_MODEL_SETTINGS_STORAGE_KEY, JSON.stringify(cityModelSettings));
+}
+
 function cityRegionClass(city) {
   if (city.id === 'telaviv' || city.id === 'jeddah' || city.id === 'capetown') return ' city-region-europe';
   if (city.metar?.startsWith('K')) return ' city-region-usa';
@@ -285,12 +307,25 @@ function cityModelOptions() {
   const visibleOptions = options.slice(0, options.length >= 20 ? 20 : 10);
   const averagedIds = rankedCityId === activeCity.id ? Object.keys(averagedModelsById) : [];
   const savedIds = currentSavedAverageModels().map((item) => item.id);
+  
+  let baseList;
   if (rankedCityId !== activeCity.id || (!rankedModelIds.length && !averagedIds.length)) {
-    return [...savedIds, ...visibleOptions];
+    baseList = [...savedIds, ...visibleOptions];
+  } else {
+    const ranked = rankedModelIds.filter((id) => visibleOptions.includes(id));
+    const rest = visibleOptions.filter((id) => !ranked.includes(id));
+    baseList = [...savedIds, ...averagedIds, ...ranked, ...rest];
   }
-  const ranked = rankedModelIds.filter((id) => visibleOptions.includes(id));
-  const rest = visibleOptions.filter((id) => !ranked.includes(id));
-  return [...savedIds, ...averagedIds, ...ranked, ...rest];
+  
+  // Inject extra model as 2nd position if set for this city
+  const settings = cityModelSettings[activeCity.id];
+  const extraModelId = settings?.extraModel;
+  if (extraModelId && extraModelId !== 'none' && !baseList.includes(extraModelId) && WEATHER_MODELS[extraModelId]) {
+    baseList = baseList.filter((id) => id !== extraModelId);
+    baseList.splice(1, 0, extraModelId);
+  }
+  
+  return baseList;
 }
 
 function renderModelDock() {
@@ -456,6 +491,95 @@ function toggleLocationNotes() {
   locationNotesOpen = !locationNotesOpen;
   saveLocationNotesOpen();
   renderLocationNotes();
+}
+
+function openCityModelSettings() {
+  const panel = document.getElementById('cityModelSettingsPanel');
+  if (!panel) return;
+  const settings = cityModelSettings[activeCity.id] || {};
+  
+  document.getElementById('settingsCityName').textContent = activeCity.name;
+  
+  const mainSelect = document.getElementById('settingsMainModel');
+  const extraSelect = document.getElementById('settingsExtraModel');
+  
+  const models = cityModelOptions().filter((id) => !id.startsWith('avg_') && !id.startsWith('saved_avg_') && WEATHER_MODELS[id]);
+  
+  const noneOption = '<option value="none">-- None (use default) --</option>';
+  
+  mainSelect.innerHTML = noneOption + models.map((id) => {
+    const label = WEATHER_MODELS[id] || id;
+    const sel = id === settings.mainModel ? ' selected' : '';
+    return `<option value="${id}"${sel}>${label}</option>`;
+  }).join('');
+  
+  extraSelect.innerHTML = '<option value="none">-- None --</option>' + models.map((id) => {
+    const label = WEATHER_MODELS[id] || id;
+    const sel = id === settings.extraModel ? ' selected' : '';
+    return `<option value="${id}"${sel}>${label}</option>`;
+  }).join('');
+  
+  panel.style.display = '';
+}
+
+function closeCityModelSettings() {
+  const panel = document.getElementById('cityModelSettingsPanel');
+  if (panel) panel.style.display = 'none';
+}
+
+function saveCityModelSettings() {
+  const mainModel = document.getElementById('settingsMainModel').value;
+  const extraModel = document.getElementById('settingsExtraModel').value;
+  
+  if (!cityModelSettings[activeCity.id]) {
+    cityModelSettings[activeCity.id] = {};
+  }
+  cityModelSettings[activeCity.id].mainModel = mainModel === 'none' ? null : mainModel;
+  cityModelSettings[activeCity.id].extraModel = extraModel === 'none' ? null : extraModel;
+  
+  // Clean up empty settings
+  if (!cityModelSettings[activeCity.id].mainModel && !cityModelSettings[activeCity.id].extraModel) {
+    delete cityModelSettings[activeCity.id];
+  }
+  
+  saveCityModelSettingsToStorage();
+  
+  // Apply main model immediately if changed
+  const newMain = cityModelSettings[activeCity.id]?.mainModel;
+  if (newMain && cityModelOptions().includes(newMain)) {
+    activeForecastModel = newMain;
+  } else {
+    activeForecastModel = cityModelOptions()[0] || 'auto';
+  }
+  
+  extraModelMaxTempC = null;
+  renderModelDock();
+  document.getElementById('omLoading').style.display = '';
+  document.getElementById('omLoading').textContent = 'Loading...';
+  
+  const panel = document.getElementById('cityModelSettingsPanel');
+  if (panel) panel.style.display = 'none';
+  
+  fetchOpenMeteo().catch(console.error);
+}
+
+function copyForecastMaxTemp() {
+  const el = document.getElementById('forecastMaxTemp');
+  if (!el || !el.textContent) return;
+  // Strip temperature unit suffixes (°C, °F) and any spaces
+  let text = el.textContent
+    .replace(/\u00B0[CF]\s*/g, '')
+    .replace(/\u00B0F\s*/g, '')
+    .replace(/°[CF]\s*/g, '')
+    .trim();
+  
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyTempBtn');
+    if (btn) {
+      btn.classList.add('copied');
+      setTimeout(() => btn.classList.remove('copied'), 1500);
+    }
+  }).catch(() => {});
 }
 
 function resetModelRanking() {
@@ -843,6 +967,7 @@ async function rankForecastModelAverages() {
     }
     renderModelDock();
     drawChart();
+    fetchExtraModelMaxTemp();
   } else {
     activeForecastModel = bestSingle.id;
     if (status) {
@@ -1015,6 +1140,7 @@ async function rankForecastModelAveragesFromEight() {
     }
     renderModelDock();
     drawChart();
+    fetchExtraModelMaxTemp();
   } else {
     activeForecastModel = bestSingle.id;
     if (status) {
@@ -1048,7 +1174,7 @@ function selectForecastModel(modelId) {
   document.getElementById('omLoading').style.display = '';
   document.getElementById('omLoading').textContent = 'Loading...';
   drawChart();
-  if (averaged?.rows?.length) updateForecastMaxTemp();
+  if (averaged?.rows?.length) { updateForecastMaxTemp(); fetchExtraModelMaxTemp(); }
   if (averaged?.rows?.length) {
     document.getElementById('omLoading').style.display = 'none';
     setOmHeader();
@@ -1099,7 +1225,14 @@ function switchCity(cityId) {
   activeCity = CITIES[cityId];
   resetModelRanking();
   rankingRunId += 1;
-  activeForecastModel = cityModelOptions()[0] || 'auto';
+  const settings = cityModelSettings[activeCity.id];
+  const savedMain = settings?.mainModel;
+  const options = cityModelOptions();
+  if (savedMain && options.includes(savedMain)) {
+    activeForecastModel = savedMain;
+  } else {
+    activeForecastModel = options[0] || 'auto';
+  }
   metarToday = [];
   metarObsTime = null;
   chartState = null;
@@ -1111,8 +1244,10 @@ function switchCity(cityId) {
   const requests = [fetchOpenMeteo(), fetchEcmwfTags()];
   if (isTodayForecastSelected()) requests.push(loadMetar());
   Promise.all(requests).catch(console.error);
+  fetchExtraModelMaxTemp();
 }
 
+cityModelSettings = loadCityModelSettings();
 setupCitySearch();
 renderCityList();
 setCityChrome();
@@ -1121,6 +1256,7 @@ setupChartMouse();
 if (isTodayForecastSelected()) loadMetar().catch(console.error);
 fetchOpenMeteo().catch(console.error);
 fetchEcmwfTags();
+fetchExtraModelMaxTemp();
 const pollingIntervals = {
   metar: setInterval(() => {
     if (isTodayForecastSelected()) loadMetar().catch(console.error);
