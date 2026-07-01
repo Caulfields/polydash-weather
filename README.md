@@ -25,7 +25,7 @@ npm start
 | `GET /api/forecast?station=&model=&date=` | Open-Meteo forecast proxy |
 | `GET /api/metar?station=&hours=` | METAR observations |
 | `GET /api/temperature?city=` | Model ranking results (API key required) |
-| `GET /api/bot/weather?city=&date=` | Single-city weather bot response |
+| `GET /api/bot/weather?city=&date=` | Single-city bot response with city ranking and 3 model slots (v2.0) |
 | `POST /api/bot/weather/batch` | Batch weather bot response |
 | `GET /api/city-ranking` | City ranking (green/blue/yellow/red) |
 | `GET /api/test-models` | Test model configuration |

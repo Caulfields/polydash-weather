@@ -186,8 +186,8 @@ Endpoints
 
 GET /api/bot/weather
 
-Use this endpoint from a bot to get current observations, a selected forecast,
-and model accuracy data for one city.
+Use this endpoint from a bot to get category, model forecasts, and hourly data
+for one city.
 
 POST /api/bot/weather/batch
 
@@ -273,7 +273,7 @@ Bot Weather Response
 
 {
   "schema_version": "2.0",
-  "generated_at": "2026-05-13T09:20:00.000Z",
+  "generated_at": "2026-07-01T10:00:00.000Z",
   "items": [
     {
       "city": {
@@ -282,78 +282,38 @@ Bot Weather Response
         "station": "EGLC",
         "timezone": "Europe/London"
       },
-      "date": "2026-05-13",
+      "date": "2026-07-01",
       "unit": "C",
-      "observations": {
-        "source": "aviationweather",
-        "used_fallback": false,
-        "latest_time": "2026-05-13T09:30:00+01:00",
-        "latest_temp_c": 10.0,
-        "current_high_c": 10.0,
-        "current_high_time": "2026-05-13T09:30:00+01:00",
-        "latest_age_minutes": 8,
-        "raw": "EGLC 130930Z ..."
-      },
-      "forecast": {
-        "source": "open-meteo",
-        "model_id": "avg_ecmwf_ifs025__icon_seamless",
-        "model_type": "average",
-        "model_ids": ["ecmwf_ifs025", "icon_seamless"],
-        "day_max_c": 14.0,
-        "day_max_time": "2026-05-13T14:00:00+01:00",
-        "forecast_30min": [
-          {
-            "time": "2026-05-13T10:00:00+01:00",
-            "temp_c": 10.6
-          }
-        ],
-        "next_30m_max_c": 10.6,
-        "next_60m_max_c": 11.1,
-        "next_90m_max_c": 11.5,
-        "next_120m_max_c": 12.0
-      },
-      "best_model": {
-        "id": "avg_ecmwf_ifs025__icon_seamless",
-        "name": "avg_ecmwf_ifs025__icon_seamless",
-        "type": "average",
-        "model_ids": ["ecmwf_ifs025", "icon_seamless"],
-        "accuracy": {
-          "mae_c": 0.61,
-          "rmse_c": 0.73,
-          "matches": 24,
-          "score": 0.942
-        }
-      },
       "category": 1,
       "category_label": "green",
       "models": {
         "basic": {
           "id": "ecmwf_ifs025",
           "name": "ECMWF IFS 0.25",
-          "max_temp_today_c": 14.0,
-          "max_temp_today_time": "2026-05-13T14:00:00+01:00",
-          "max_temp_tomorrow_c": 15.2,
-          "max_temp_tomorrow_time": "2026-05-14T13:00:00+01:00",
+          "max_temp_today_c": 22.5,
+          "max_temp_today_time": "2026-07-01T15:00:00+01:00",
+          "max_temp_tomorrow_c": 23.1,
+          "max_temp_tomorrow_time": "2026-07-02T14:00:00+01:00",
           "hourly": {
             "today": [
-              { "hour": 8,  "time": "2026-05-13T08:00:00+01:00", "temperature_c": 9.2,  "cloud_cover": 45, "cloud_cover_low": 20, "precipitation": 0.0 },
-              { "hour": 9,  "time": "2026-05-13T09:00:00+01:00", "temperature_c": 10.1, "cloud_cover": 50, "cloud_cover_low": 22, "precipitation": 0.0 },
-              { "hour": 10, "time": "2026-05-13T10:00:00+01:00", "temperature_c": 11.0, "cloud_cover": 55, "cloud_cover_low": 25, "precipitation": 0.0 },
-              { "hour": 11, "time": "2026-05-13T11:00:00+01:00", "temperature_c": 11.8, "cloud_cover": 60, "cloud_cover_low": 28, "precipitation": 0.0 },
-              { "hour": 12, "time": "2026-05-13T12:00:00+01:00", "temperature_c": 12.5, "cloud_cover": 65, "cloud_cover_low": 30, "precipitation": 0.0 },
-              { "hour": 13, "time": "2026-05-13T13:00:00+01:00", "temperature_c": 13.2, "cloud_cover": 70, "cloud_cover_low": 32, "precipitation": 0.0 },
-              { "hour": 14, "time": "2026-05-13T14:00:00+01:00", "temperature_c": 14.0, "cloud_cover": 70, "cloud_cover_low": 32, "precipitation": 0.0 },
-              { "hour": 15, "time": "2026-05-13T15:00:00+01:00", "temperature_c": 13.8, "cloud_cover": 65, "cloud_cover_low": 30, "precipitation": 0.0 },
-              { "hour": 16, "time": "2026-05-13T16:00:00+01:00", "temperature_c": 13.2, "cloud_cover": 60, "cloud_cover_low": 28, "precipitation": 0.0 },
-              { "hour": 17, "time": "2026-05-13T17:00:00+01:00", "temperature_c": 12.4, "cloud_cover": 55, "cloud_cover_low": 25, "precipitation": 0.0 },
-              { "hour": 18, "time": "2026-05-13T18:00:00+01:00", "temperature_c": 11.5, "cloud_cover": 50, "cloud_cover_low": 22, "precipitation": 0.0 },
-              { "hour": 19, "time": "2026-05-13T19:00:00+01:00", "temperature_c": 10.6, "cloud_cover": 45, "cloud_cover_low": 20, "precipitation": 0.0 },
-              { "hour": 20, "time": "2026-05-13T20:00:00+01:00", "temperature_c": 9.8,  "cloud_cover": 40, "cloud_cover_low": 18, "precipitation": 0.0 },
-              { "hour": 21, "time": "2026-05-13T21:00:00+01:00", "temperature_c": 9.0,  "cloud_cover": 35, "cloud_cover_low": 15, "precipitation": 0.0 },
-              { "hour": 22, "time": "2026-05-13T22:00:00+01:00", "temperature_c": 8.5,  "cloud_cover": 30, "cloud_cover_low": 12, "precipitation": 0.0 }
+              { "hour": 8,  "time": "2026-07-01T08:00:00+01:00", "temperature_c": 17.2, "cloud_cover": 30, "cloud_cover_low": 10, "precipitation": 0.0 },
+              { "hour": 9,  "time": "2026-07-01T09:00:00+01:00", "temperature_c": 18.1, "cloud_cover": 25, "cloud_cover_low": 8,  "precipitation": 0.0 },
+              { "hour": 10, "time": "2026-07-01T10:00:00+01:00", "temperature_c": 19.0, "cloud_cover": 20, "cloud_cover_low": 5,  "precipitation": 0.0 },
+              { "hour": 11, "time": "2026-07-01T11:00:00+01:00", "temperature_c": 19.8, "cloud_cover": 20, "cloud_cover_low": 5,  "precipitation": 0.0 },
+              { "hour": 12, "time": "2026-07-01T12:00:00+01:00", "temperature_c": 20.5, "cloud_cover": 25, "cloud_cover_low": 8,  "precipitation": 0.0 },
+              { "hour": 13, "time": "2026-07-01T13:00:00+01:00", "temperature_c": 21.2, "cloud_cover": 25, "cloud_cover_low": 8,  "precipitation": 0.0 },
+              { "hour": 14, "time": "2026-07-01T14:00:00+01:00", "temperature_c": 21.9, "cloud_cover": 30, "cloud_cover_low": 10, "precipitation": 0.0 },
+              { "hour": 15, "time": "2026-07-01T15:00:00+01:00", "temperature_c": 22.5, "cloud_cover": 30, "cloud_cover_low": 10, "precipitation": 0.0 },
+              { "hour": 16, "time": "2026-07-01T16:00:00+01:00", "temperature_c": 22.0, "cloud_cover": 35, "cloud_cover_low": 12, "precipitation": 0.0 },
+              { "hour": 17, "time": "2026-07-01T17:00:00+01:00", "temperature_c": 21.3, "cloud_cover": 35, "cloud_cover_low": 12, "precipitation": 0.0 },
+              { "hour": 18, "time": "2026-07-01T18:00:00+01:00", "temperature_c": 20.4, "cloud_cover": 40, "cloud_cover_low": 15, "precipitation": 0.0 },
+              { "hour": 19, "time": "2026-07-01T19:00:00+01:00", "temperature_c": 19.5, "cloud_cover": 40, "cloud_cover_low": 15, "precipitation": 0.0 },
+              { "hour": 20, "time": "2026-07-01T20:00:00+01:00", "temperature_c": 18.6, "cloud_cover": 45, "cloud_cover_low": 18, "precipitation": 0.0 },
+              { "hour": 21, "time": "2026-07-01T21:00:00+01:00", "temperature_c": 17.7, "cloud_cover": 45, "cloud_cover_low": 18, "precipitation": 0.0 },
+              { "hour": 22, "time": "2026-07-01T22:00:00+01:00", "temperature_c": 16.8, "cloud_cover": 50, "cloud_cover_low": 20, "precipitation": 0.0 }
             ],
             "tomorrow": [
-              { "hour": 8,  "time": "2026-05-14T08:00:00+01:00", "temperature_c": 9.5,  "cloud_cover": 40, "cloud_cover_low": 18, "precipitation": 0.0 }
+              { "hour": 8,  "time": "2026-07-02T08:00:00+01:00", "temperature_c": 17.5, "cloud_cover": 35, "cloud_cover_low": 12, "precipitation": 0.0 }
             ]
           }
         },
@@ -370,90 +330,70 @@ Bot Weather Response
 }
 
 
-Model Selection
----------------
+Model Slots
+-----------
 
-For each city, the bot endpoint:
+The bot API does NOT select a "best" model. Instead, for every requested city it
+returns forecast data for up to three models configured by the site:
 
-1. Gets same-date METAR observations from AviationWeather.
-2. Searches forecast model candidates from Open-Meteo.
-3. Scores the best single model against observations.
-4. Scores averaged model combinations.
-5. Selects whichever has the lower score.
-6. Returns forecast data from the selected single model or averaged model set.
+  models.basic       — always populated (the user's primary model for the city)
+  models.additional  — null if not configured, otherwise populated
+  models.test        — null if not configured, otherwise populated
 
-Lower mae_c, rmse_c, and score values are better.
+Each populated model slot has the same shape: max temperature for today and
+tomorrow, plus hourly data for hours 8-22 local time on each day.
+
+Configure slots via the gear icon on the site, or via:
+  POST /api/test-models  with body { "cityId": "...", "models": { "basic": "...", "additional": "...", "test": "..." } }
 
 
 Bot Fields To Use
 -----------------
 
-observations.latest_temp_c
-  Latest observed temperature in Celsius.
-
-observations.current_high_c
-  Highest observed temperature so far on the requested local date.
-
-forecast.day_max_c
-  Forecast maximum temperature for the requested local date.
-
-forecast.forecast_30min
-  30-minute forecast points from now until one hour after the forecast day peak.
-  "Now" is evaluated in the requested city's local timezone, not in the server
-  timezone. For example, London uses Europe/London, Jakarta uses Asia/Jakarta,
-  and Cape Town uses Africa/Johannesburg. Returned timestamps include the local
-  UTC offset for that city.
-
-  The response includes the peak point plus two more half-hour snapshots after
-  the peak. Half-hour points are interpolated between Open-Meteo hourly values.
-
-forecast.next_30m_max_c, forecast.next_60m_max_c, forecast.next_90m_max_c,
-forecast.next_120m_max_c
-  Rolling maximum temperatures from the returned 30-minute forecast points.
-
-best_model.type
-  "single" when one model won, or "average" when an averaged model combination
-  won.
-
-data_quality.status
-  "ok", "warning", or "peak_over". If status is "peak_over", the forecast peak
-  has already passed for the requested local date and forecast_30min is empty.
-
 category
   Integer 1-4 indicating the city's current sky condition.
   1 = green, 2 = blue, 3 = yellow, 4 = red.
+  Cached server-side for 10 minutes.
 
 category_label
   String label matching category: "green", "blue", "yellow", or "red".
 
-models
-  Block with three model slots: basic, additional, test.
-  Each slot is either null (not configured) or an object with:
+models.basic, models.additional, models.test
+  Three model slots. Each is either null (not configured) or an object with:
     id, name               — model identifier and display name
-    max_temp_today_c, max_temp_today_time
-    max_temp_tomorrow_c, max_temp_tomorrow_time
-    hourly.today, hourly.tomorrow
-                             — arrays of hourly rows for hours 8-22 local time,
-                               each with hour, time, temperature_c, cloud_cover,
-                               cloud_cover_low, precipitation.
+    max_temp_today_c       — max temperature for today in Celsius (or null)
+    max_temp_today_time    — ISO timestamp of the max (or null)
+    max_temp_tomorrow_c    — max temperature for tomorrow in Celsius (or null)
+    max_temp_tomorrow_time — ISO timestamp of tomorrow's max (or null)
+    hourly.today           — array of hourly rows for today (hours 8-22 local)
+    hourly.tomorrow        — array of hourly rows for tomorrow (hours 8-22 local)
 
-  The basic slot is always populated (defaults to the first model for the city).
-  The additional and test slots are null if not configured.
-
-models.basic.hourly.today[].hour
+models.<slot>.hourly.today[].hour
   Local hour 8-22 (inclusive).
+
+models.<slot>.hourly.today[].time
+  ISO timestamp with the city's UTC offset, e.g. "2026-07-01T15:00:00+01:00".
 
 models.<slot>.hourly.today[].temperature_c
   Temperature in Celsius at that hour.
 
 models.<slot>.hourly.today[].cloud_cover
-  Total cloud cover percentage 0-100. May be null if unavailable.
+  Total cloud cover percentage 0-100. Null if unavailable.
 
 models.<slot>.hourly.today[].cloud_cover_low
-  Low cloud cover percentage 0-100. May be null if unavailable.
+  Low cloud cover percentage 0-100. Null if unavailable.
 
 models.<slot>.hourly.today[].precipitation
-  Precipitation in millimeters for that hour. May be null if unavailable.
+  Precipitation in millimeters for that hour. Null if unavailable.
+
+data_quality.status
+  "ok" or "warning".
+
+data_quality.warnings
+  Array of warning strings. Empty in normal operation.
+
+errors
+  Batch-only per-item failures. Successful city results still appear in items.
 
 Note: Solar radiation / shortwave_radiation fields were removed in schema 2.0.
 The chart tooltip and forecast parsing no longer include W/m² values.
@@ -515,7 +455,3 @@ Response:
   "ok": true,
   "models": { "basic": "ecmwf_ifs025", "additional": "icon_seamless", "test": "gem_seamless" }
 }
-
-
-errors
-  Batch-only per-item failures. Successful city results still appear in items.
