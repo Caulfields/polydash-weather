@@ -43,7 +43,6 @@ function parseHourlyRows(hourly, dateKey, modelId) {
   const windDir = hourlyField(hourly, 'wind_direction_10m', modelId);
   const cloudCover = hourlyField(hourly, 'cloud_cover', modelId);
   const cloudCoverLow = hourlyField(hourly, 'cloud_cover_low', modelId);
-  const shortwaveRadiation = hourlyField(hourly, 'shortwave_radiation', modelId);
   const weatherCode = hourlyField(hourly, 'weather_code', modelId);
 
   return times
@@ -66,7 +65,6 @@ function parseHourlyRows(hourly, dateKey, modelId) {
         windDir: typeof windDir[index] === 'number' ? windDir[index] : null,
         cloudCover: typeof cloudCover[index] === 'number' ? cloudCover[index] : null,
         cloudCoverLow: typeof cloudCoverLow[index] === 'number' ? cloudCoverLow[index] : null,
-        shortwaveRadiation: typeof shortwaveRadiation[index] === 'number' ? shortwaveRadiation[index] : null,
         weatherCode: typeof weatherCode[index] === 'number' ? weatherCode[index] : null,
       };
     })
@@ -116,10 +114,6 @@ function drawOmChart() {
   drawChart();
 }
 
-const omChartInterval = setInterval(() => {
-  if (omData) drawOmChart();
-}, 60000);
-
 function windDir(degValue) {
   const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
   return dirs[Math.round(degValue / 22.5) % 16];
@@ -158,7 +152,7 @@ async function fetchOpenMeteo() {
       document.getElementById('omLoading').style.display = 'none';
       drawChart();
       updateForecastMaxTemp();
-      fetchExtraModelMaxTemp();
+      fetchAdditionalAndTestMaxTemp();
       updateWeatherCodeUI();
       fetchModelStatus();
       if (isTodayForecastSelected()) tryReuseEcmwfTags(hourlyOmState.rows);
@@ -177,7 +171,7 @@ async function fetchOpenMeteo() {
       document.getElementById('omLoading').style.display = 'none';
       drawChart();
       updateForecastMaxTemp();
-      fetchExtraModelMaxTemp();
+      fetchAdditionalAndTestMaxTemp();
       updateWeatherCodeUI();
       fetchModelStatus();
       if (isTodayForecastSelected()) tryReuseEcmwfTags(hourlyOmState.rows);
@@ -197,7 +191,7 @@ async function fetchOpenMeteo() {
     setOmHeader();
     drawChart();
     updateForecastMaxTemp();
-    fetchExtraModelMaxTemp();
+    fetchAdditionalAndTestMaxTemp();
     updateWeatherCodeUI();
     fetchModelStatus();
     if (requestModel === 'ecmwf_ifs025') {
@@ -273,40 +267,79 @@ function updateForecastMaxTemp() {
     return;
   }
   const maxTemp = Math.max(...rows.map((r) => r.temp));
-  if (extraModelMaxTempC != null && Number.isFinite(extraModelMaxTempC)) {
-    el.textContent = `${formatTempFromCelsius(maxTemp, { decimals: 1 })} / ${formatTempFromCelsius(extraModelMaxTempC, { decimals: 1 })}`;
-  } else {
-    el.textContent = formatTempFromCelsius(maxTemp, { decimals: 1 });
+  const tempStr = formatTempFromCelsius(maxTemp, { decimals: 1 });
+  const parts = [tempStr];
+  if (additionalModelMaxTempC != null && Number.isFinite(additionalModelMaxTempC)) {
+    parts.push(formatTempFromCelsius(additionalModelMaxTempC, { decimals: 1 }));
   }
+  if (testModelMaxTempC != null && Number.isFinite(testModelMaxTempC)) {
+    parts.push(formatTempFromCelsius(testModelMaxTempC, { decimals: 1 }));
+  }
+  el.textContent = parts.join(' / ');
 }
 
-async function fetchExtraModelMaxTemp() {
+async function fetchAdditionalAndTestMaxTemp() {
   const settings = cityModelSettings[activeCity.id];
-  const extraModelId = settings?.extraModel;
-  extraModelMaxTempC = null;
-  if (!extraModelId || extraModelId === 'none' || extraModelId === activeForecastModel) {
-    updateForecastMaxTemp();
-    return;
+  const additionalModelId = settings?.additional;
+  const testModelId = settings?.test;
+  additionalModelMaxTempC = null;
+  testModelMaxTempC = null;
+
+  const promises = [];
+
+  if (additionalModelId && additionalModelId !== 'none' && additionalModelId !== activeForecastModel) {
+    promises.push(
+      (async () => {
+        const requestCityId = activeCity.id;
+        const requestModel = additionalModelId;
+        try {
+          const params = new URLSearchParams({
+            station: activeCity.metar,
+            model: additionalModelId,
+            date: activeForecastDateKey(activeCity.timezone),
+          });
+          const res = await fetch(`/api/forecast?${params.toString()}`, { cache: 'no-store' });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (requestCityId !== activeCity.id || requestModel !== cityModelSettings[activeCity.id]?.additional) return;
+          const rows = parseHourlyRows(data.hourly || {}, activeForecastDateKey(activeCity.timezone), additionalModelId);
+          if (rows.length) {
+            additionalModelMaxTempC = Math.max(...rows.map((r) => r.temp));
+          }
+        } catch (e) {
+          console.warn('Additional model fetch:', e.message);
+        }
+      })()
+    );
   }
-  const requestCityId = activeCity.id;
-  const requestModel = extraModelId;
-  try {
-    const params = new URLSearchParams({
-      station: activeCity.metar,
-      model: extraModelId,
-      date: activeForecastDateKey(activeCity.timezone),
-    });
-    const res = await fetch(`/api/forecast?${params.toString()}`, { cache: 'no-store' });
-    if (!res.ok) return;
-    const data = await res.json();
-    if (requestCityId !== activeCity.id || requestModel !== cityModelSettings[activeCity.id]?.extraModel) return;
-    const rows = parseHourlyRows(data.hourly || {}, activeForecastDateKey(activeCity.timezone), extraModelId);
-    if (rows.length) {
-      extraModelMaxTempC = Math.max(...rows.map((r) => r.temp));
-    }
-  } catch (e) {
-    console.warn('Extra model fetch:', e.message);
+
+  if (testModelId && testModelId !== 'none' && testModelId !== activeForecastModel) {
+    promises.push(
+      (async () => {
+        const requestCityId = activeCity.id;
+        const requestModel = testModelId;
+        try {
+          const params = new URLSearchParams({
+            station: activeCity.metar,
+            model: testModelId,
+            date: activeForecastDateKey(activeCity.timezone),
+          });
+          const res = await fetch(`/api/forecast?${params.toString()}`, { cache: 'no-store' });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (requestCityId !== activeCity.id || requestModel !== cityModelSettings[activeCity.id]?.test) return;
+          const rows = parseHourlyRows(data.hourly || {}, activeForecastDateKey(activeCity.timezone), testModelId);
+          if (rows.length) {
+            testModelMaxTempC = Math.max(...rows.map((r) => r.temp));
+          }
+        } catch (e) {
+          console.warn('Test model fetch:', e.message);
+        }
+      })()
+    );
   }
+
+  if (promises.length) await Promise.all(promises);
   updateForecastMaxTemp();
 }
 
@@ -340,6 +373,7 @@ const WMO_WEATHER_CODES = {
   96: 'Thunderstorm with slight hail',
   99: 'Thunderstorm with heavy hail',
 };
+window.WMO_WEATHER_CODES = WMO_WEATHER_CODES;
 
 const CODE_SEVERITY = {
   0:0, 1:1, 2:2, 3:3,

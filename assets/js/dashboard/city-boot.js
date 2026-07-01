@@ -12,6 +12,8 @@ let cityNotesById = loadCityNotes();
 let savedAverageModelsByCity = loadSavedAverageModels();
 let locationNotesOpen = loadLocationNotesOpen();
 let cityFilterMode = 'all';
+let cityCategories = {};
+let citySortMode = null;
 let rankedModelIds = [];
 let modelScoresById = {};
 let averagedModelsById = {};
@@ -77,6 +79,11 @@ function cityEmptyStateText() {
   if (cityFilterMode === 'green') return 'No green-list cities match';
   if (cityFilterMode === 'red') return 'No red-list cities match';
   return 'No matching cities';
+}
+
+function categoryLabel(category) {
+  const labels = { 1: 'green', 2: 'blue', 3: 'yellow', 4: 'red' };
+  return labels[category] || 'green';
 }
 
 function renderCityListControls() {
@@ -229,14 +236,18 @@ function saveLocationNotesOpen() {
 function loadCityModelSettings() {
   try {
     const raw = localStorage.getItem(CITY_MODEL_SETTINGS_STORAGE_KEY);
-    const parsed = JSON.parse(raw || '{}');
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
     return Object.fromEntries(
       Object.entries(parsed)
         .filter(([cityId, val]) => CITIES[cityId] && val && typeof val === 'object')
         .map(([cityId, val]) => [cityId, {
-          mainModel: (val.mainModel && WEATHER_MODELS[val.mainModel]) ? val.mainModel : null,
-          extraModel: (val.extraModel && WEATHER_MODELS[val.extraModel]) ? val.extraModel : null,
+          basic: (val.basic && WEATHER_MODELS[val.basic]) ? val.basic
+              : (val.mainModel && WEATHER_MODELS[val.mainModel]) ? val.mainModel : null,
+          additional: (val.additional && WEATHER_MODELS[val.additional]) ? val.additional
+              : (val.extraModel && WEATHER_MODELS[val.extraModel]) ? val.extraModel : null,
+          test: (val.test && WEATHER_MODELS[val.test]) ? val.test : null,
         }])
     );
   } catch (error) {
@@ -267,7 +278,8 @@ function cityRegionRank(city) {
 function renderCityList() {
   const cityList = document.getElementById('cityList');
   const query = citySearchQuery.trim().toLowerCase();
-  const cities = Object.values(CITIES).filter((city) => {
+  
+  let cities = Object.values(CITIES).filter((city) => {
     if (!cityFilterMatches(city)) return false;
     if (!query) return true;
     return [
@@ -276,13 +288,28 @@ function renderCityList() {
       city.airport,
       city.timezone,
     ].some((value) => `${value || ''}`.toLowerCase().includes(query));
-  }).sort((a, b) => cityRegionRank(a) - cityRegionRank(b));
+  });
 
-  cityList.innerHTML = cities.length ? cities.map((city) => `
+  if (citySortMode === 'ranking') {
+    cities.sort((a, b) => {
+      const regionDiff = cityRegionRank(a) - cityRegionRank(b);
+      if (regionDiff !== 0) return regionDiff;
+      const catA = cityCategories[a.id]?.category || 1;
+      const catB = cityCategories[b.id]?.category || 1;
+      return catA - catB;
+    });
+  } else {
+    cities.sort((a, b) => cityRegionRank(a) - cityRegionRank(b));
+  }
+
+  cityList.innerHTML = cities.length ? cities.map((city) => {
+    const catClass = citySortMode === 'ranking' ? categoryLabel(cityCategories[city.id]?.category || 1) : '';
+    const catDot = catClass ? `<span class="city-category-dot cat-${catClass}" aria-hidden="true"></span>` : '';
+    return `
     <div class="city-card${cityRegionClass(city)}${city.id === activeCity.id ? ' active' : ''}" id="cityTab-${city.id}">
       <button class="city-button" type="button" onclick="switchCity('${city.id}')">
         <span class="city-name-row">
-          <span class="city-name">${city.name}</span>
+          <span class="city-name">${catDot}${city.name}</span>
           <span class="city-station">${city.metar}</span>
         </span>
         <span class="city-airport">${city.airport}</span>
@@ -291,7 +318,8 @@ function renderCityList() {
         ${favoriteCityIds.has(city.id) ? '&#9733;' : '&#9734;'}
       </button>
     </div>
-  `).join('') : `<div class="city-empty">${cityEmptyStateText()}</div>`;
+  `;
+  }).join('') : `<div class="city-empty">${cityEmptyStateText()}</div>`;
 
   ['favorite', 'green', 'red'].forEach((mode) => {
     const button = document.getElementById(`city${mode.charAt(0).toUpperCase()}${mode.slice(1)}sFilter`);
@@ -300,6 +328,12 @@ function renderCityList() {
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', `${active}`);
   });
+
+  const sortBtn = document.getElementById('citySortBtn');
+  if (sortBtn) {
+    sortBtn.classList.toggle('active', citySortMode === 'ranking');
+    sortBtn.setAttribute('aria-pressed', citySortMode === 'ranking' ? 'true' : 'false');
+  }
 }
 
 function cityModelOptions() {
@@ -317,12 +351,19 @@ function cityModelOptions() {
     baseList = [...savedIds, ...averagedIds, ...ranked, ...rest];
   }
   
-  // Inject extra model as 2nd position if set for this city
+  // Inject additional model as 2nd position if set for this city
   const settings = cityModelSettings[activeCity.id];
-  const extraModelId = settings?.extraModel;
-  if (extraModelId && extraModelId !== 'none' && !baseList.includes(extraModelId) && WEATHER_MODELS[extraModelId]) {
-    baseList = baseList.filter((id) => id !== extraModelId);
-    baseList.splice(1, 0, extraModelId);
+  const additionalModelId = settings?.additional;
+  if (additionalModelId && additionalModelId !== 'none' && !baseList.includes(additionalModelId) && WEATHER_MODELS[additionalModelId]) {
+    baseList = baseList.filter((id) => id !== additionalModelId);
+    baseList.splice(1, 0, additionalModelId);
+  }
+  
+  // Inject test model if set for this city
+  const testModelId = settings?.test;
+  if (testModelId && testModelId !== 'none' && !baseList.includes(testModelId) && WEATHER_MODELS[testModelId]) {
+    baseList = baseList.filter((id) => id !== testModelId);
+    baseList.splice(1, 0, testModelId);
   }
   
   return baseList;
@@ -457,6 +498,29 @@ function toggleCityFilter(filterMode) {
   renderCityList();
 }
 
+function toggleCitySort() {
+  citySortMode = citySortMode === 'ranking' ? null : 'ranking';
+  if (citySortMode === 'ranking' && !Object.keys(cityCategories).length) {
+    const btn = document.getElementById('citySortBtn');
+    if (btn) btn.classList.add('loading');
+    fetchCityRankings()
+      .then(() => { if (btn) btn.classList.remove('loading'); renderCityList(); })
+      .catch(() => { if (btn) btn.classList.remove('loading'); renderCityList(); });
+    return;
+  }
+  renderCityList();
+}
+
+async function fetchCityRankings() {
+  try {
+    const res = await fetch('/api/city-ranking', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    cityCategories = await res.json();
+  } catch (e) {
+    console.warn('City ranking fetch:', e.message);
+  }
+}
+
 function updateCityNote(cityId, value) {
   if (!CITIES[cityId]) return;
   const note = `${value || ''}`;
@@ -500,22 +564,29 @@ function openCityModelSettings() {
   
   document.getElementById('settingsCityName').textContent = activeCity.name;
   
-  const mainSelect = document.getElementById('settingsMainModel');
-  const extraSelect = document.getElementById('settingsExtraModel');
+  const basicSelect = document.getElementById('settingsBasicModel');
+  const additionalSelect = document.getElementById('settingsAdditionalModel');
+  const testSelect = document.getElementById('settingsTestModel');
   
   const models = cityModelOptions().filter((id) => !id.startsWith('avg_') && !id.startsWith('saved_avg_') && WEATHER_MODELS[id]);
   
   const noneOption = '<option value="none">-- None (use default) --</option>';
   
-  mainSelect.innerHTML = noneOption + models.map((id) => {
+  basicSelect.innerHTML = models.map((id) => {
     const label = WEATHER_MODELS[id] || id;
-    const sel = id === settings.mainModel ? ' selected' : '';
+    const sel = id === settings.basic ? ' selected' : '';
     return `<option value="${id}"${sel}>${label}</option>`;
   }).join('');
   
-  extraSelect.innerHTML = '<option value="none">-- None --</option>' + models.map((id) => {
+  additionalSelect.innerHTML = noneOption + models.map((id) => {
     const label = WEATHER_MODELS[id] || id;
-    const sel = id === settings.extraModel ? ' selected' : '';
+    const sel = id === settings.additional ? ' selected' : '';
+    return `<option value="${id}"${sel}>${label}</option>`;
+  }).join('');
+  
+  testSelect.innerHTML = noneOption + models.map((id) => {
+    const label = WEATHER_MODELS[id] || id;
+    const sel = id === settings.test ? ' selected' : '';
     return `<option value="${id}"${sel}>${label}</option>`;
   }).join('');
   
@@ -528,31 +599,48 @@ function closeCityModelSettings() {
 }
 
 function saveCityModelSettings() {
-  const mainModel = document.getElementById('settingsMainModel').value;
-  const extraModel = document.getElementById('settingsExtraModel').value;
+  const basicValue = document.getElementById('settingsBasicModel').value;
+  const additionalValue = document.getElementById('settingsAdditionalModel').value;
+  const testValue = document.getElementById('settingsTestModel').value;
   
   if (!cityModelSettings[activeCity.id]) {
     cityModelSettings[activeCity.id] = {};
   }
-  cityModelSettings[activeCity.id].mainModel = mainModel === 'none' ? null : mainModel;
-  cityModelSettings[activeCity.id].extraModel = extraModel === 'none' ? null : extraModel;
+  cityModelSettings[activeCity.id].basic = basicValue === 'none' ? null : basicValue;
+  cityModelSettings[activeCity.id].additional = additionalValue === 'none' ? null : additionalValue;
+  cityModelSettings[activeCity.id].test = testValue === 'none' ? null : testValue;
   
   // Clean up empty settings
-  if (!cityModelSettings[activeCity.id].mainModel && !cityModelSettings[activeCity.id].extraModel) {
+  if (!cityModelSettings[activeCity.id].basic && !cityModelSettings[activeCity.id].additional && !cityModelSettings[activeCity.id].test) {
     delete cityModelSettings[activeCity.id];
   }
   
   saveCityModelSettingsToStorage();
   
-  // Apply main model immediately if changed
-  const newMain = cityModelSettings[activeCity.id]?.mainModel;
-  if (newMain && cityModelOptions().includes(newMain)) {
-    activeForecastModel = newMain;
+  // Sync to server for bot API
+  fetch('/api/test-models', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      cityId: activeCity.id,
+      models: {
+        basic: cityModelSettings[activeCity.id]?.basic || '',
+        additional: cityModelSettings[activeCity.id]?.additional || '',
+        test: cityModelSettings[activeCity.id]?.test || '',
+      },
+    }),
+  }).catch(() => {}); // fire and forget
+  
+  // Apply basic model immediately if changed
+  const newBasic = cityModelSettings[activeCity.id]?.basic;
+  if (newBasic && cityModelOptions().includes(newBasic)) {
+    activeForecastModel = newBasic;
   } else {
     activeForecastModel = cityModelOptions()[0] || 'auto';
   }
   
-  extraModelMaxTempC = null;
+  additionalModelMaxTempC = null;
+  testModelMaxTempC = null;
   renderModelDock();
   document.getElementById('omLoading').style.display = '';
   document.getElementById('omLoading').textContent = 'Loading...';
@@ -797,7 +885,6 @@ function averageForecastRows(combo) {
       windDir: averageDirection(rows.map((row) => row.windDir)),
       cloudCover: average('cloudCover'),
       cloudCoverLow: average('cloudCoverLow'),
-      shortwaveRadiation: average('shortwaveRadiation'),
       weatherCode: first.weatherCode ?? null,
     };
   }).filter((row) => typeof row.temp === 'number');
@@ -913,7 +1000,7 @@ async function rankForecastModelAverages() {
     return;
   }
 
-  const comboPool = singles;
+  const comboPool = singles.slice(0, 8);
   let bestCombo = null;
   let tested = 0;
   const total = [2, 3, 4].reduce((sum, size) => sum + combinations(comboPool, size).length, 0);
@@ -967,7 +1054,7 @@ async function rankForecastModelAverages() {
     }
     renderModelDock();
     drawChart();
-    fetchExtraModelMaxTemp();
+    fetchAdditionalAndTestMaxTemp();
   } else {
     activeForecastModel = bestSingle.id;
     if (status) {
@@ -1086,7 +1173,7 @@ async function rankForecastModelAveragesFromEight() {
     return;
   }
 
-  const comboPool = singles;
+  const comboPool = singles.slice(0, 8);
   let bestCombo = null;
   let tested = 0;
   const total = [2, 3, 4].reduce((sum, size) => sum + combinations(comboPool, size).length, 0);
@@ -1140,7 +1227,7 @@ async function rankForecastModelAveragesFromEight() {
     }
     renderModelDock();
     drawChart();
-    fetchExtraModelMaxTemp();
+    fetchAdditionalAndTestMaxTemp();
   } else {
     activeForecastModel = bestSingle.id;
     if (status) {
@@ -1174,7 +1261,7 @@ function selectForecastModel(modelId) {
   document.getElementById('omLoading').style.display = '';
   document.getElementById('omLoading').textContent = 'Loading...';
   drawChart();
-  if (averaged?.rows?.length) { updateForecastMaxTemp(); fetchExtraModelMaxTemp(); }
+  if (averaged?.rows?.length) { updateForecastMaxTemp(); fetchAdditionalAndTestMaxTemp(); }
   if (averaged?.rows?.length) {
     document.getElementById('omLoading').style.display = 'none';
     setOmHeader();
@@ -1226,10 +1313,10 @@ function switchCity(cityId) {
   resetModelRanking();
   rankingRunId += 1;
   const settings = cityModelSettings[activeCity.id];
-  const savedMain = settings?.mainModel;
+  const savedBasic = settings?.basic;
   const options = cityModelOptions();
-  if (savedMain && options.includes(savedMain)) {
-    activeForecastModel = savedMain;
+  if (savedBasic && options.includes(savedBasic)) {
+    activeForecastModel = savedBasic;
   } else {
     activeForecastModel = options[0] || 'auto';
   }
@@ -1244,10 +1331,25 @@ function switchCity(cityId) {
   const requests = [fetchOpenMeteo(), fetchEcmwfTags()];
   if (isTodayForecastSelected()) requests.push(loadMetar());
   Promise.all(requests).catch(console.error);
-  fetchExtraModelMaxTemp();
+  fetchAdditionalAndTestMaxTemp();
 }
 
 cityModelSettings = loadCityModelSettings();
+
+// Load server-side test model config
+fetch('/api/test-models', { cache: 'no-store' })
+  .then((res) => res.ok ? res.json() : {})
+  .then((serverConfig) => {
+    Object.entries(serverConfig || {}).forEach(([cityId, models]) => {
+      if (!CITIES[cityId] || !models) return;
+      if (!cityModelSettings[cityId]) cityModelSettings[cityId] = {};
+      // Server config overrides localStorage for test slot
+      if (models.test && WEATHER_MODELS[models.test]) {
+        cityModelSettings[cityId].test = models.test;
+      }
+    });
+  })
+  .catch(() => {});
 setupCitySearch();
 renderCityList();
 setCityChrome();
@@ -1256,12 +1358,13 @@ setupChartMouse();
 if (isTodayForecastSelected()) loadMetar().catch(console.error);
 fetchOpenMeteo().catch(console.error);
 fetchEcmwfTags();
-fetchExtraModelMaxTemp();
+fetchAdditionalAndTestMaxTemp();
 const pollingIntervals = {
   metar: setInterval(() => {
     if (isTodayForecastSelected()) loadMetar().catch(console.error);
   }, METAR_REFRESH_MS),
   om: setInterval(fetchOpenMeteo, OM_REFRESH_MS),
+  chart: setInterval(() => { if (omData || hourlyOmState) drawChart(); }, 60000),
   ecmwf: setInterval(fetchEcmwfTags, 3600000),
   clock: setInterval(tickCityClock, 15000),
 };
@@ -1275,6 +1378,24 @@ function resumePolling() {
     if (isTodayForecastSelected()) loadMetar().catch(console.error);
   }, METAR_REFRESH_MS);
   pollingIntervals.om = setInterval(fetchOpenMeteo, OM_REFRESH_MS);
+  pollingIntervals.chart = setInterval(() => { if (omData || hourlyOmState) drawChart(); }, 60000);
   pollingIntervals.ecmwf = setInterval(fetchEcmwfTags, 3600000);
   pollingIntervals.clock = setInterval(tickCityClock, 15000);
 }
+
+fetchCityRankings();
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    suspendPolling();
+    metarAgeInterval && clearInterval(metarAgeInterval);
+  } else {
+    resumePolling();
+    metarAgeInterval = setInterval(() => {
+      if (metarObsTime) {
+        if (!cachedMetarUpd) cachedMetarUpd = document.getElementById('metarUpd');
+        if (cachedMetarUpd) cachedMetarUpd.textContent = fmtMetarAge(metarObsTime);
+      }
+    }, 30000);
+  }
+});

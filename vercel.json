@@ -9,6 +9,8 @@
   "routes": [
     { "src": "/api/bot/weather/batch", "dest": "api/bot/weather/batch.js" },
     { "src": "/api/bot/weather", "dest": "api/bot/weather.js" },
+    { "src": "/api/city-ranking", "dest": "api/city-ranking.js" },
+    { "src": "/api/test-models", "dest": "api/test-models.js" },
     { "src": "/api/metar", "dest": "api/metar.js" },
     { "src": "/api/forecast", "dest": "api/forecast.js" },
     { "src": "/api/temperature", "dest": "api/temperature.js" },

@@ -30,7 +30,6 @@ function getForecastRows() {
       weatherCode: row.weatherCode,
       cloudCover: row.cloudCover,
       cloudCoverLow: row.cloudCoverLow,
-      shortwaveRadiation: row.shortwaveRadiation,
       label: row.label,
       sourceLabel: hourlyOmState.sourceLabel || activeCity.omSourceLabel || 'Open-Meteo',
     }));
@@ -58,7 +57,6 @@ function getForecastRows() {
       label: time.substring(11, 16),
       cloudCover: null,
       cloudCoverLow: null,
-      shortwaveRadiation: null,
       sourceLabel: activeCity.omSourceLabel || 'Open-Meteo',
     };
   }).filter(Boolean);
@@ -454,7 +452,7 @@ function drawChart() {
   }
 
   const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
 
   const forecastRows = getForecastRows();
@@ -507,13 +505,8 @@ function drawChart() {
   ctx.textAlign = 'center';
   for (let hour = 0; hour <= 24; hour += 1) {
     const x = xOfHr(hour);
-    const isHalfHourMark = hour % 2 === 0;
-    if (isHalfHourMark) {
-      ctx.fillText(`${hour.toString().padStart(2, '0')}:00`, x, height - pad.bottom + 13);
-    } else {
-      ctx.fillText(`${(hour - 1).toString().padStart(2, '0')}:30`, x, height - pad.bottom + 13);
-    }
-    ctx.strokeStyle = isHalfHourMark ? 'rgba(37,40,54,0.5)' : 'rgba(37,40,54,0.25)';
+    ctx.fillText(`${hour.toString().padStart(2, '0')}:00`, x, height - pad.bottom + 13);
+    ctx.strokeStyle = hour % 2 === 0 ? 'rgba(37,40,54,0.5)' : 'rgba(37,40,54,0.25)';
     ctx.beginPath();
     ctx.moveTo(x, pad.top);
     ctx.lineTo(x, pad.top + chartHeight);
@@ -756,7 +749,7 @@ function setupChartMouse() {
     const selectedX = xOfHr(forecastCandidate?.hourFrac ?? toHourFrac(observedCandidate.time));
 
     ctx.save();
-    ctx.scale(dpr, dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.setLineDash([3, 3]);
     ctx.lineWidth = 1;
     ctx.strokeStyle = 'rgba(255,255,255,0.22)';
@@ -815,16 +808,24 @@ function setupChartMouse() {
       const lowCloudText = typeof forecastCandidate.cloudCoverLow === 'number'
         ? `L.c. ${Math.round(forecastCandidate.cloudCoverLow)}%`
         : null;
-      const solarText = typeof forecastCandidate.shortwaveRadiation === 'number' && forecastCandidate.shortwaveRadiation > 0
-        ? `${Math.round(forecastCandidate.shortwaveRadiation)} W/m²`
-        : null;
       const rainText = forecastCandidate.rain > 0
         ? `${forecastCandidate.rain.toFixed(1)} mm`
         : null;
-      const parts = [cloudText, lowCloudText, solarText, rainText].filter(Boolean);
+      const parts = [cloudText, lowCloudText, rainText].filter(Boolean);
       forecastNoteEl.textContent = parts.join(' · ');
     } else {
       forecastNoteEl.textContent = 'no forecast point near this time';
+    }
+
+    const forecastWmoEl = document.getElementById('ttForecastWmo');
+    if (forecastCandidate && typeof forecastCandidate.weatherCode === 'number') {
+      const wmoCodes = window.WMO_WEATHER_CODES || {};
+      const label = wmoCodes[forecastCandidate.weatherCode];
+      forecastWmoEl.textContent = label || `Code ${forecastCandidate.weatherCode}`;
+      forecastWmoEl.style.display = '';
+      forecastWmoEl.className = 'chart-tooltip-note wmo-badge';
+    } else {
+      forecastWmoEl.style.display = 'none';
     }
 
     const metarWindRow = document.getElementById('ttMetarWindRow');

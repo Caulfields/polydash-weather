@@ -290,7 +290,8 @@ let omMode = 'best';
 let hourlyOmState = null;
 let temperatureHighlight = null;
 let cityModelSettings = {};
-let extraModelMaxTempC = null;
+let additionalModelMaxTempC = null;
+let testModelMaxTempC = null;
 if (typeof module !== 'undefined') {
   module.exports = {
     WEATHER_MODELS,

@@ -272,7 +272,7 @@ Bot Weather Response
 --------------------
 
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "generated_at": "2026-05-13T09:20:00.000Z",
   "items": [
     {
@@ -323,6 +323,42 @@ Bot Weather Response
           "matches": 24,
           "score": 0.942
         }
+      },
+      "category": 1,
+      "category_label": "green",
+      "models": {
+        "basic": {
+          "id": "ecmwf_ifs025",
+          "name": "ECMWF IFS 0.25",
+          "max_temp_today_c": 14.0,
+          "max_temp_today_time": "2026-05-13T14:00:00+01:00",
+          "max_temp_tomorrow_c": 15.2,
+          "max_temp_tomorrow_time": "2026-05-14T13:00:00+01:00",
+          "hourly": {
+            "today": [
+              { "hour": 8,  "time": "2026-05-13T08:00:00+01:00", "temperature_c": 9.2,  "cloud_cover": 45, "cloud_cover_low": 20, "precipitation": 0.0 },
+              { "hour": 9,  "time": "2026-05-13T09:00:00+01:00", "temperature_c": 10.1, "cloud_cover": 50, "cloud_cover_low": 22, "precipitation": 0.0 },
+              { "hour": 10, "time": "2026-05-13T10:00:00+01:00", "temperature_c": 11.0, "cloud_cover": 55, "cloud_cover_low": 25, "precipitation": 0.0 },
+              { "hour": 11, "time": "2026-05-13T11:00:00+01:00", "temperature_c": 11.8, "cloud_cover": 60, "cloud_cover_low": 28, "precipitation": 0.0 },
+              { "hour": 12, "time": "2026-05-13T12:00:00+01:00", "temperature_c": 12.5, "cloud_cover": 65, "cloud_cover_low": 30, "precipitation": 0.0 },
+              { "hour": 13, "time": "2026-05-13T13:00:00+01:00", "temperature_c": 13.2, "cloud_cover": 70, "cloud_cover_low": 32, "precipitation": 0.0 },
+              { "hour": 14, "time": "2026-05-13T14:00:00+01:00", "temperature_c": 14.0, "cloud_cover": 70, "cloud_cover_low": 32, "precipitation": 0.0 },
+              { "hour": 15, "time": "2026-05-13T15:00:00+01:00", "temperature_c": 13.8, "cloud_cover": 65, "cloud_cover_low": 30, "precipitation": 0.0 },
+              { "hour": 16, "time": "2026-05-13T16:00:00+01:00", "temperature_c": 13.2, "cloud_cover": 60, "cloud_cover_low": 28, "precipitation": 0.0 },
+              { "hour": 17, "time": "2026-05-13T17:00:00+01:00", "temperature_c": 12.4, "cloud_cover": 55, "cloud_cover_low": 25, "precipitation": 0.0 },
+              { "hour": 18, "time": "2026-05-13T18:00:00+01:00", "temperature_c": 11.5, "cloud_cover": 50, "cloud_cover_low": 22, "precipitation": 0.0 },
+              { "hour": 19, "time": "2026-05-13T19:00:00+01:00", "temperature_c": 10.6, "cloud_cover": 45, "cloud_cover_low": 20, "precipitation": 0.0 },
+              { "hour": 20, "time": "2026-05-13T20:00:00+01:00", "temperature_c": 9.8,  "cloud_cover": 40, "cloud_cover_low": 18, "precipitation": 0.0 },
+              { "hour": 21, "time": "2026-05-13T21:00:00+01:00", "temperature_c": 9.0,  "cloud_cover": 35, "cloud_cover_low": 15, "precipitation": 0.0 },
+              { "hour": 22, "time": "2026-05-13T22:00:00+01:00", "temperature_c": 8.5,  "cloud_cover": 30, "cloud_cover_low": 12, "precipitation": 0.0 }
+            ],
+            "tomorrow": [
+              { "hour": 8,  "time": "2026-05-14T08:00:00+01:00", "temperature_c": 9.5,  "cloud_cover": 40, "cloud_cover_low": 18, "precipitation": 0.0 }
+            ]
+          }
+        },
+        "additional": null,
+        "test": null
       },
       "data_quality": {
         "status": "ok",
@@ -382,6 +418,104 @@ best_model.type
 data_quality.status
   "ok", "warning", or "peak_over". If status is "peak_over", the forecast peak
   has already passed for the requested local date and forecast_30min is empty.
+
+category
+  Integer 1-4 indicating the city's current sky condition.
+  1 = green, 2 = blue, 3 = yellow, 4 = red.
+
+category_label
+  String label matching category: "green", "blue", "yellow", or "red".
+
+models
+  Block with three model slots: basic, additional, test.
+  Each slot is either null (not configured) or an object with:
+    id, name               — model identifier and display name
+    max_temp_today_c, max_temp_today_time
+    max_temp_tomorrow_c, max_temp_tomorrow_time
+    hourly.today, hourly.tomorrow
+                             — arrays of hourly rows for hours 8-22 local time,
+                               each with hour, time, temperature_c, cloud_cover,
+                               cloud_cover_low, precipitation.
+
+  The basic slot is always populated (defaults to the first model for the city).
+  The additional and test slots are null if not configured.
+
+models.basic.hourly.today[].hour
+  Local hour 8-22 (inclusive).
+
+models.<slot>.hourly.today[].temperature_c
+  Temperature in Celsius at that hour.
+
+models.<slot>.hourly.today[].cloud_cover
+  Total cloud cover percentage 0-100. May be null if unavailable.
+
+models.<slot>.hourly.today[].cloud_cover_low
+  Low cloud cover percentage 0-100. May be null if unavailable.
+
+models.<slot>.hourly.today[].precipitation
+  Precipitation in millimeters for that hour. May be null if unavailable.
+
+Note: Solar radiation / shortwave_radiation fields were removed in schema 2.0.
+The chart tooltip and forecast parsing no longer include W/m² values.
+
+
+City Ranking Endpoint
+---------------------
+
+GET /api/city-ranking
+
+Returns the current sky-condition category (1-4) for every city. Results are
+cached server-side for 10 minutes.
+
+Response:
+{
+  "london": { "category": 1 },
+  "beijing": { "category": 3 },
+  "dallas": { "category": 4 }
+}
+
+Categories:
+  1 = green   — clear or light high clouds
+  2 = blue    — significant high clouds, few low clouds
+  3 = yellow  — significant low cloud cover
+  4 = red     — 3+ hours of precipitation expected between hours 7-20 local time
+
+
+Test Models Endpoint
+--------------------
+
+GET /api/test-models
+
+Returns the configured 3-slot model assignment (basic, additional, test) for
+every city. Unconfigured slots are empty strings.
+
+Response:
+{
+  "london": { "basic": "ecmwf_ifs025", "additional": "icon_seamless", "test": "" },
+  "beijing": { "basic": "cma_grapes_global", "additional": "", "test": "" }
+}
+
+POST /api/test-models
+
+Update the 3-slot model assignment for a single city. The server stores the
+result in memory; deployments do not persist changes across cold starts.
+
+Request:
+{
+  "cityId": "london",
+  "models": {
+    "basic": "ecmwf_ifs025",
+    "additional": "icon_seamless",
+    "test": "gem_seamless"
+  }
+}
+
+Response:
+{
+  "ok": true,
+  "models": { "basic": "ecmwf_ifs025", "additional": "icon_seamless", "test": "gem_seamless" }
+}
+
 
 errors
   Batch-only per-item failures. Successful city results still appear in items.

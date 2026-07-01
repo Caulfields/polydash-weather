@@ -7,7 +7,8 @@ const { HttpsProxyAgent } = require('https-proxy-agent');
 const { STATIONS, normalizeStation } = require('./data/weather-stations');
 const { resolveCity, rankTemperature } = require('./lib/weather-ranking');
 const { buildSingleWeatherResponse, buildBatchWeatherResponse } = require('./lib/bot-weather');
-const { fetchForecast } = require('./lib/open-meteo');
+const { cachedFetchForecast } = require('./lib/open-meteo');
+const { computeCityCategories } = require('./lib/city-ranking');
 
 function getSystemProxy() {
   const env = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
@@ -34,11 +35,8 @@ app.use(express.static(path.join(__dirname)));
 app.use(express.json({ limit: '64kb' }));
 
 const METAR_TTL_MS = 30 * 60_000;
-const FORECAST_TTL_MS = 10 * 60_000;
 const metarCache = new Map();
-const forecastCache = new Map();
 const metarInflight = new Map();
-const forecastInflight = new Map();
 
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
@@ -138,28 +136,11 @@ app.get('/api/forecast', async (req, res) => {
     return;
   }
 
-  const cacheKey = `${station}|${model}|${date}`;
-  const cache = forecastCache.get(cacheKey) || { data: null, ts: 0 };
-  if (cache.data && Date.now() - cache.ts < FORECAST_TTL_MS) {
-    res.setHeader('X-Cache', 'HIT');
-    res.json(cache.data);
-    return;
-  }
-
   try {
-    if (!forecastInflight.has(cacheKey)) {
-      forecastInflight.set(cacheKey, fetchForecast(fetchJson, station, model, date).finally(() => forecastInflight.delete(cacheKey)));
-    }
-    const data = await forecastInflight.get(cacheKey);
-    forecastCache.set(cacheKey, { data, ts: Date.now() });
-    res.setHeader('X-Cache', 'MISS');
+    const data = await cachedFetchForecast(fetchJson, station, model, date);
+    res.setHeader('X-Cache', 'HIT');
     res.json(data);
   } catch (error) {
-    if (cache.data) {
-      res.setHeader('X-Cache', 'STALE');
-      res.json(cache.data);
-      return;
-    }
     res.status(502).json({ error: error.message });
   }
 });
@@ -261,6 +242,16 @@ app.post('/api/bot/weather/batch', async (req, res) => {
     res.json(await buildBatchWeatherResponse(req.body || {}));
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/api/city-ranking', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const categories = await computeCityCategories(fetchJson);
+    res.json(categories);
+  } catch (error) {
+    res.status(502).json({ error: error.message });
   }
 });
 

@@ -88,6 +88,7 @@
               <span class="chart-tooltip-temp forecast" id="ttForecastTemp">--</span>
             </div>
             <div class="chart-tooltip-note" id="ttForecastNote"></div>
+            <div class="chart-tooltip-note" id="ttForecastWmo" style="display:none"></div>
             <div class="chart-tooltip-row tooltip-row-wind" id="ttForecastWindRow">
               <span class="chart-tooltip-wind" id="ttForecastWind">--</span>
             </div>
@@ -103,8 +104,9 @@
           <span class="rank-status" id="modelRankStatus"></span>
           <div class="city-model-settings" id="cityModelSettingsPanel" style="display:none">
             <span class="city-model-settings-title">Settings for <strong id="settingsCityName"></strong></span>
-            <select class="city-model-settings-select" id="settingsMainModel" aria-label="Main model"></select>
-            <select class="city-model-settings-select" id="settingsExtraModel" aria-label="Additional model"></select>
+            <select class="city-model-settings-select" id="settingsBasicModel" aria-label="Basic model"></select>
+            <select class="city-model-settings-select" id="settingsAdditionalModel" aria-label="Additional model"></select>
+            <select class="city-model-settings-select" id="settingsTestModel" aria-label="Test model"></select>
             <button class="city-model-settings-save" type="button" onclick="saveCityModelSettings()">Save</button>
             <button class="city-model-settings-close" type="button" onclick="closeCityModelSettings()">✕</button>
           </div>
@@ -137,15 +139,15 @@
       <div class="city-filter-bar">
         <button class="city-filter-btn" id="cityFavoritesFilter" type="button" aria-pressed="false" onclick="toggleCityFilter('favorite')">
           <span class="favorite-icon" aria-hidden="true">&#9734;</span>
-          Favorites
         </button>
         <button class="city-filter-btn green" id="cityGreensFilter" type="button" aria-pressed="false" onclick="toggleCityFilter('green')">
           <span class="favorite-icon" aria-hidden="true">&#9679;</span>
-          Green list
         </button>
         <button class="city-filter-btn red" id="cityRedsFilter" type="button" aria-pressed="false" onclick="toggleCityFilter('red')">
           <span class="favorite-icon" aria-hidden="true">&#9679;</span>
-          Red list
+        </button>
+        <button class="city-filter-btn sort" id="citySortBtn" type="button" aria-pressed="false" onclick="toggleCitySort()">
+          <span class="sort-icon" aria-hidden="true">↕</span>
         </button>
       </div>
       <div class="city-list" id="cityList"></div>
