@@ -337,36 +337,32 @@ function renderCityList() {
 }
 
 function cityModelOptions() {
-  const options = activeCity.modelOptions?.length ? activeCity.modelOptions : US_MODELS.slice(0, 10);
-  const visibleOptions = options.slice(0, options.length >= 20 ? 20 : 10);
+  const settings = cityModelSettings[activeCity.id] || {};
+  const pinned = [settings.basic, settings.additional, settings.test]
+    .filter((id) => id && id !== 'none' && WEATHER_MODELS[id]);
+
+  const options = activeCity.modelOptions?.length ? activeCity.modelOptions : US_MODELS;
+  const rest = options.filter((id) => !pinned.includes(id));
+
+  let orderedRest;
+  if (rankedCityId === activeCity.id && rankedModelIds.length) {
+    const ranked = rankedModelIds.filter((id) => rest.includes(id));
+    const unranked = rest.filter((id) => !ranked.includes(id));
+    orderedRest = [...ranked, ...unranked];
+  } else {
+    orderedRest = rest;
+  }
+
+  const baseList = [...pinned, ...orderedRest];
+
   const averagedIds = rankedCityId === activeCity.id ? Object.keys(averagedModelsById) : [];
   const savedIds = currentSavedAverageModels().map((item) => item.id);
-  
-  let baseList;
-  if (rankedCityId !== activeCity.id || (!rankedModelIds.length && !averagedIds.length)) {
-    baseList = [...savedIds, ...visibleOptions];
-  } else {
-    const ranked = rankedModelIds.filter((id) => visibleOptions.includes(id));
-    const rest = visibleOptions.filter((id) => !ranked.includes(id));
-    baseList = [...savedIds, ...averagedIds, ...ranked, ...rest];
-  }
-  
-  // Inject additional model as 2nd position if set for this city
-  const settings = cityModelSettings[activeCity.id];
-  const additionalModelId = settings?.additional;
-  if (additionalModelId && additionalModelId !== 'none' && !baseList.includes(additionalModelId) && WEATHER_MODELS[additionalModelId]) {
-    baseList = baseList.filter((id) => id !== additionalModelId);
-    baseList.splice(1, 0, additionalModelId);
-  }
-  
-  // Inject test model if set for this city
-  const testModelId = settings?.test;
-  if (testModelId && testModelId !== 'none' && !baseList.includes(testModelId) && WEATHER_MODELS[testModelId]) {
-    baseList = baseList.filter((id) => id !== testModelId);
-    baseList.splice(1, 0, testModelId);
-  }
-  
-  return baseList;
+
+  const result = [...baseList];
+  savedIds.forEach((id) => { if (!result.includes(id)) result.push(id); });
+  averagedIds.forEach((id) => { if (!result.includes(id)) result.push(id); });
+
+  return result;
 }
 
 function renderModelDock() {

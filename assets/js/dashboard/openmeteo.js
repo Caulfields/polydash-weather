@@ -194,9 +194,7 @@ async function fetchOpenMeteo() {
     fetchAdditionalAndTestMaxTemp();
     updateWeatherCodeUI();
     fetchModelStatus();
-    if (requestModel === 'ecmwf_ifs025') {
-      updateEcmwfTagsDOM(hourlyOmState.rows);
-    }
+    updateTagsDOM(hourlyOmState.rows);
   } catch (error) {
     console.warn('Open-Meteo fetch:', error.message);
     document.getElementById('omLoading').textContent = 'Open-Meteo unavailable';
@@ -217,12 +215,10 @@ window.addEventListener('resize', () => {
 });
 
 function tryReuseEcmwfTags(rows) {
-  if (activeForecastModel === 'ecmwf_ifs025') {
-    updateEcmwfTagsDOM(rows);
-  }
+  updateTagsDOM(rows);
 }
 
-function updateEcmwfTagsDOM(rows) {
+function updateTagsDOM(rows) {
   const tagWind = document.getElementById('tagWind');
   const tagRain = document.getElementById('tagRain');
   const tagCloud = document.getElementById('tagCloud');
@@ -232,10 +228,12 @@ function updateEcmwfTagsDOM(rows) {
   tagCloud.style.display = 'none';
   tagCloud.textContent = '';
 
-  const hasStrongWind = rows.some((row) => row.windSpeed != null && row.windSpeed > 10 && row.hourFrac >= 8);
-  const hasRain = rows.some((row) => row.rain != null && row.rain > 0);
-  const avgCloud = rows.reduce((sum, r) => sum + (r.cloudCover || 0), 0) / rows.length;
-  const avgRainProb = rows.reduce((sum, r) => sum + (r.rainProb || 0), 0) / rows.length;
+  const filtered = rows.filter((r) => r.hourFrac >= 11 && r.hourFrac <= 20);
+
+  const hasStrongWind = filtered.some((row) => row.windSpeed != null && row.windSpeed > 10 && row.hourFrac >= 8);
+  const hasRain = filtered.some((row) => row.rain != null && row.rain > 0);
+  const avgCloud = filtered.reduce((sum, r) => sum + (r.cloudCover || 0), 0) / filtered.length;
+  const avgCloudLow = filtered.reduce((sum, r) => sum + (r.cloudCoverLow || 0), 0) / filtered.length;
 
   if (hasStrongWind) {
     tagWind.style.display = '';
@@ -245,16 +243,10 @@ function updateEcmwfTagsDOM(rows) {
     tagRain.style.display = '';
     tagRain.className = 'weather-tag rain';
   }
-  let cloudText = '';
-  if (avgCloud > 0) cloudText += `${Math.round(avgCloud)}% cloud`;
-  if (avgRainProb > 0) {
-    if (cloudText) cloudText += ' / ';
-    cloudText += `${Math.round(avgRainProb)}% rain`;
-  }
-  if (cloudText) {
+  if (filtered.length) {
     tagCloud.style.display = '';
     tagCloud.className = 'weather-tag cloud';
-    tagCloud.textContent = cloudText;
+    tagCloud.textContent = `${Math.round(avgCloud)}/${Math.round(avgCloudLow)}`;
   }
 }
 
@@ -476,8 +468,8 @@ async function fetchEcmwfTags() {
   const tagCloud = document.getElementById('tagCloud');
   if (!tagWind || !tagRain || !tagCloud) return;
 
-  if (activeForecastModel === 'ecmwf_ifs025' && hourlyOmState?.rows?.length) {
-    updateEcmwfTagsDOM(hourlyOmState.rows);
+  if (hourlyOmState?.rows?.length) {
+    updateTagsDOM(hourlyOmState.rows);
     return;
   }
 
@@ -490,7 +482,7 @@ async function fetchEcmwfTags() {
   const dateKey = activeForecastDateKey(activeCity.timezone);
   const params = new URLSearchParams({
     station: activeCity.metar,
-    model: 'ecmwf_ifs025',
+    model: activeForecastModel,
     date: dateKey,
   });
   try {
@@ -498,11 +490,11 @@ async function fetchEcmwfTags() {
     if (!res.ok) return;
     const data = await res.json();
     if (requestCityId !== activeCity.id) return;
-    const rows = parseHourlyRows(data.hourly || {}, dateKey, 'ecmwf_ifs025');
+    const rows = parseHourlyRows(data.hourly || {}, dateKey, activeForecastModel);
     if (!rows.length) return;
 
-    updateEcmwfTagsDOM(rows);
+    updateTagsDOM(rows);
   } catch (e) {
-    console.warn('ECMWF tags fetch:', e.message);
+    console.warn('Tags fetch:', e.message);
   }
 }
