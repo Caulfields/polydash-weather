@@ -222,13 +222,17 @@ function updateTagsDOM(rows) {
   const tagWind = document.getElementById('tagWind');
   const tagRain = document.getElementById('tagRain');
   const tagCloud = document.getElementById('tagCloud');
-  if (!tagWind || !tagRain || !tagCloud) return;
+  const tagCloudNight = document.getElementById('tagCloudNight');
+  if (!tagWind || !tagRain || !tagCloud || !tagCloudNight) return;
   tagWind.style.display = 'none';
   tagRain.style.display = 'none';
   tagCloud.style.display = 'none';
   tagCloud.textContent = '';
+  tagCloudNight.style.display = 'none';
+  tagCloudNight.textContent = '';
 
   const filtered = rows.filter((r) => r.hourFrac >= 11 && r.hourFrac <= 20);
+  const filteredNight = rows.filter((r) => r.hourFrac >= 2 && r.hourFrac <= 9);
 
   const hasStrongWind = filtered.some((row) => row.windSpeed != null && row.windSpeed > 10 && row.hourFrac >= 8);
   const hasRain = filtered.some((row) => row.rain != null && row.rain > 0);
@@ -247,6 +251,13 @@ function updateTagsDOM(rows) {
     tagCloud.style.display = '';
     tagCloud.className = 'weather-tag cloud';
     tagCloud.textContent = `${Math.round(avgCloud)}/${Math.round(avgCloudLow)}`;
+  }
+  if (filteredNight.length) {
+    const avgCloudNight = filteredNight.reduce((sum, r) => sum + (r.cloudCover || 0), 0) / filteredNight.length;
+    const avgCloudLowNight = filteredNight.reduce((sum, r) => sum + (r.cloudCoverLow || 0), 0) / filteredNight.length;
+    tagCloudNight.style.display = '';
+    tagCloudNight.className = 'weather-tag cloud-night';
+    tagCloudNight.textContent = `Night ${Math.round(avgCloudNight)}/${Math.round(avgCloudLowNight)}`;
   }
 }
 
@@ -466,7 +477,8 @@ async function fetchEcmwfTags() {
   const tagWind = document.getElementById('tagWind');
   const tagRain = document.getElementById('tagRain');
   const tagCloud = document.getElementById('tagCloud');
-  if (!tagWind || !tagRain || !tagCloud) return;
+  const tagCloudNight = document.getElementById('tagCloudNight');
+  if (!tagWind || !tagRain || !tagCloud || !tagCloudNight) return;
 
   if (hourlyOmState?.rows?.length) {
     updateTagsDOM(hourlyOmState.rows);
@@ -477,6 +489,8 @@ async function fetchEcmwfTags() {
   tagRain.style.display = 'none';
   tagCloud.style.display = 'none';
   tagCloud.textContent = '';
+  tagCloudNight.style.display = 'none';
+  tagCloudNight.textContent = '';
 
   const requestCityId = activeCity.id;
   const dateKey = activeForecastDateKey(activeCity.timezone);

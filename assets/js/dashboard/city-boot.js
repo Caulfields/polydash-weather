@@ -1291,9 +1291,11 @@ function clearWeatherTags() {
   const w = document.getElementById('tagWind');
   const r = document.getElementById('tagRain');
   const c = document.getElementById('tagCloud');
+  const cn = document.getElementById('tagCloudNight');
   if (w) w.style.display = 'none';
   if (r) r.style.display = 'none';
   if (c) c.style.display = 'none';
+  if (cn) cn.style.display = 'none';
 }
 
 function toggleMetarRaw() {

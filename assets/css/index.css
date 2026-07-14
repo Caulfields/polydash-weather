@@ -250,6 +250,12 @@ h1, h2 {
   border: 1px solid rgba(156, 163, 175, 0.25);
 }
 
+.weather-tag.cloud-night {
+  color: #a5b4fc;
+  background: rgba(129, 140, 248, 0.12);
+  border: 1px solid rgba(129, 140, 248, 0.3);
+}
+
 .chart-wrap {
   position: relative;
   min-width: 0;
