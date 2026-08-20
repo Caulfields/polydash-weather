@@ -9,6 +9,7 @@ const { resolveCity, rankTemperature } = require('./lib/weather-ranking');
 const { buildSingleWeatherResponse, buildBatchWeatherResponse } = require('./lib/bot-weather');
 const { cachedFetchForecast } = require('./lib/open-meteo');
 const { computeCityCategories } = require('./lib/city-ranking');
+const { TEST_MODELS, getTestModels, setTestModels } = require('./data/test-models');
 
 function getSystemProxy() {
   const env = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
@@ -31,7 +32,6 @@ if (proxyAgent) console.log('Proxy for Open-Meteo:', proxyUrl);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.static(path.join(__dirname)));
 app.use(express.json({ limit: '64kb' }));
 
 const METAR_TTL_MS = 30 * 60_000;
@@ -138,7 +138,6 @@ app.get('/api/forecast', async (req, res) => {
 
   try {
     const data = await cachedFetchForecast(fetchJson, station, model, date);
-    res.setHeader('X-Cache', 'HIT');
     res.json(data);
   } catch (error) {
     res.status(502).json({ error: error.message });
@@ -255,6 +254,23 @@ app.get('/api/city-ranking', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Weather dashboard running at http://localhost:${PORT}`);
+app.get('/api/test-models', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(TEST_MODELS);
 });
+
+app.post('/api/test-models', (req, res) => {
+  setTestModels(req.body && req.body.cityId, req.body && req.body.models);
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ ok: true, models: getTestModels(req.body && req.body.cityId) });
+});
+
+app.use(express.static(path.join(__dirname)));
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Weather dashboard running at http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;

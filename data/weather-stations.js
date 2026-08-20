@@ -51,7 +51,7 @@ const STATIONS = {
 };
 
 function normalizeStation(value) {
-  return `${value || 'EGLC'}`.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+  return `${value || ''}`.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
 }
 
 module.exports = { STATIONS, normalizeStation };

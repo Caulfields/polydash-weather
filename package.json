@@ -3,10 +3,17 @@
   "version": "1.0.0",
   "description": "Single-page weather dashboard",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test \"test/unit/*.test.js\" \"test/api/*.test.js\"",
+    "test:unit": "node --test \"test/unit/*.test.js\"",
+    "test:api": "node --test \"test/api/*.test.js\"",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "express": "^4.19.2",
     "https-proxy-agent": "^9.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
   }
 }

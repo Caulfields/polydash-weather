@@ -1,6 +1,10 @@
 node_modules/
+.opencode/
 .env
 .env.local
 .vercel
 .codex/
 *.log
+test-results/
+playwright-report/
+playwright/.cache/
