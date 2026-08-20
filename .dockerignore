@@ -1,0 +1,13 @@
+node_modules
+.git
+.gitignore
+.github
+.opencode
+*.log
+.env
+.env.*
+test-results
+playwright-report
+playwright/.cache
+deploy_ssh_setup.py
+opencode.json

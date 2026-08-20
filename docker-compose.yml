@@ -1,0 +1,10 @@
+services:
+  polydash-weather:
+    build: .
+    image: polydash-weather:latest
+    container_name: polydash-weather
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
