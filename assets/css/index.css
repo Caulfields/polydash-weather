@@ -1416,6 +1416,57 @@ canvas#tempChartOverlay {
   color: #fca5a5;
   background: rgba(239, 68, 68, 0.12);
 }
+.archive-row-controls {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.archive-tag {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0.55;
+}
+.archive-tag:hover {
+  opacity: 1;
+}
+.archive-tag.active {
+  opacity: 1;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.archive-tag-badge {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 11px;
+}
+.archive-keep {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.archive-keep input {
+  accent-color: var(--orange);
+  margin: 0;
+  cursor: pointer;
+}
 .archive-empty {
   padding: 12px;
   color: var(--dim);

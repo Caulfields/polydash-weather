@@ -116,6 +116,29 @@ test('DELETE /api/archive/snapshots/:id removes snapshot', async () => {
   assert.strictEqual(byId.status, 404);
 });
 
+test('PATCH /api/archive/snapshots/:id updates category and keepForever', async () => {
+  const post = await apiRequest('/api/archive/snapshots', { method: 'POST', body: makeSnapshotPayload(CITIES.london, 400) });
+  const { snapshot } = JSON.parse(post.body);
+
+  const patch = await apiRequest(`/api/archive/snapshots/${snapshot.id}`, {
+    method: 'PATCH',
+    body: { snapshot: { category: 'green', keepForever: true } },
+  });
+  assert.strictEqual(patch.status, 200);
+  const patched = JSON.parse(patch.body).snapshot;
+  assert.strictEqual(patched.category, 'green');
+  assert.strictEqual(patched.keepForever, true);
+
+  const byId = await apiRequest(`/api/archive/snapshots/${snapshot.id}`);
+  assert.strictEqual(JSON.parse(byId.body).snapshot.keepForever, true);
+
+  const missing = await apiRequest('/api/archive/snapshots/does-not-exist', {
+    method: 'PATCH',
+    body: { snapshot: { keepForever: true } },
+  });
+  assert.strictEqual(missing.status, 404);
+});
+
 test('GET /api/archive/snapshots/:id returns 404 for unknown id', async () => {
   const res = await apiRequest('/api/archive/snapshots/does-not-exist');
   assert.strictEqual(res.status, 404);

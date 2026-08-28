@@ -359,3 +359,130 @@ test('buildSnapshotFromPayloads stores auto (best match) rows in models', () => 
   assert.ok(Array.isArray(snapshot.models.auto));
   assert.ok(snapshot.models.auto.length > 0);
 });
+
+test('settings persist category and keepForever, defaulting to none', async () => {
+  const dir = tempDir();
+  const store = createArchiveStore(dir);
+  const s1 = await store.setSettings('london', { enabled: true, time: '09:00' });
+  assert.strictEqual(s1.category, '');
+  assert.strictEqual(s1.keepForever, false);
+
+  const s2 = await store.setSettings('london', { enabled: true, time: '09:00', category: 'green', keepForever: true });
+  assert.strictEqual(s2.category, 'green');
+  assert.strictEqual(s2.keepForever, true);
+
+  const bad = await store.setSettings('paris', { enabled: true, time: '09:00', category: 'purple' });
+  assert.strictEqual(bad.category, '');
+
+  const get = await store.getSettings();
+  assert.strictEqual(get.london.category, 'green');
+  assert.strictEqual(get.london.keepForever, true);
+});
+
+test('snapshot stores category and keepForever, and inherits them from settings', async () => {
+  const dir = tempDir();
+  const store = createArchiveStore(dir);
+  await store.setSettings('london', { enabled: true, time: '09:00', category: 'red', keepForever: true });
+
+  const added = await store.addSnapshot(buildSnapshotFromPayloads({
+    city: CITIES.london,
+    dateKey: cityTodayKey(CITIES.london.timezone),
+    forecastDay: 'today',
+    model: 'auto',
+    metarPayload: londonMetarPayload(),
+    forecastPayload: londonForecastPayload(),
+    now: new Date(),
+  }));
+  assert.strictEqual(added.category, 'red');
+  assert.strictEqual(added.keepForever, true);
+
+  const summary = store.summary(added);
+  assert.strictEqual(summary.category, 'red');
+  assert.strictEqual(summary.keepForever, true);
+});
+
+test('updateSnapshot updates category and keepForever', async () => {
+  const dir = tempDir();
+  const store = createArchiveStore(dir);
+  const added = await store.addSnapshot(buildSnapshotFromPayloads({
+    city: CITIES.london,
+    dateKey: cityTodayKey(CITIES.london.timezone),
+    forecastDay: 'today',
+    model: 'auto',
+    metarPayload: londonMetarPayload(),
+    forecastPayload: londonForecastPayload(),
+    now: new Date(),
+  }));
+  assert.strictEqual(added.category, '');
+  assert.strictEqual(added.keepForever, false);
+
+  await store.updateSnapshot(added.id, { category: 'green', keepForever: true });
+  const got = await store.getSnapshot(added.id);
+  assert.strictEqual(got.category, 'green');
+  assert.strictEqual(got.keepForever, true);
+
+  assert.strictEqual(await store.updateSnapshot('missing-id', { keepForever: true }), null);
+});
+
+test('prune keeps kept-forever snapshots beyond the per-city cap', async () => {
+  const dir = tempDir();
+  const store = createArchiveStore(dir);
+  const city = CITIES.london;
+
+  // Oldest snapshot marked keepForever.
+  await store.addSnapshot({
+    ...buildSnapshotFromPayloads({
+      city,
+      dateKey: '2026-08-20',
+      forecastDay: 'today',
+      model: 'auto',
+      metarPayload: londonMetarPayload(),
+      forecastPayload: londonForecastPayload(),
+      now: new Date(0),
+    }),
+    keepForever: true,
+  });
+
+  for (let i = 0; i < MAX_ARCHIVES_PER_CITY + 5; i += 1) {
+    await store.addSnapshot(buildSnapshotFromPayloads({
+      city,
+      dateKey: '2026-08-20',
+      forecastDay: 'today',
+      model: 'auto',
+      metarPayload: londonMetarPayload(),
+      forecastPayload: londonForecastPayload(),
+      now: new Date(i + 1),
+    }));
+  }
+
+  const list = await store.listSnapshots('london');
+  assert.strictEqual(list.length, MAX_ARCHIVES_PER_CITY + 1);
+  assert.ok(list.some((s) => s.savedAtMs === 0 && s.keepForever), 'kept-forever snapshot survived cap prune');
+});
+
+test('prune skips kept-forever snapshots older than retentionDays', async () => {
+  const dir = tempDir();
+  const store = createArchiveStore(dir);
+  await store.setSettings('london', { enabled: true, time: '09:00', retentionDays: 1 });
+  const city = CITIES.london;
+  const mk = (ms, extra) => ({
+    ...buildSnapshotFromPayloads({
+      city,
+      dateKey: '2026-07-01',
+      forecastDay: 'today',
+      model: 'auto',
+      metarPayload: londonMetarPayload(),
+      forecastPayload: londonForecastPayload(),
+      now: new Date(ms),
+    }),
+    ...extra,
+  });
+
+  await store.addSnapshot(mk(Date.now() - 30 * 86400000, { keepForever: true }));
+  await store.addSnapshot(mk(Date.now() - 31 * 86400000));
+
+  const list = await store.listSnapshots('london');
+  const kept = list.find((s) => s.keepForever);
+  assert.ok(kept, 'kept-forever snapshot survives retention prune');
+  assert.strictEqual(list.filter((s) => !s.keepForever).length, 0, 'non-kept old snapshot was pruned');
+});

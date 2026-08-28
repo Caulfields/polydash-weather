@@ -301,6 +301,21 @@ app.delete('/api/archive/snapshots/:id', async (req, res) => {
   }
 });
 
+app.patch('/api/archive/snapshots/:id', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const body = await readJsonBody(req);
+    const snapshot = await archiveStore.updateSnapshot(req.params.id, body && body.snapshot);
+    if (!snapshot) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+    res.json({ ok: true, snapshot: archiveStore.summary(snapshot) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 app.get('/api/city-ranking', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {

@@ -77,11 +77,15 @@ async function saveArchiveSettings() {
   const retentionDays = retentionEl && retentionEl.value !== ''
     ? Math.max(0, Math.floor(Number(retentionEl.value)))
     : null;
+  const categoryEl = document.getElementById('archiveCategory');
+  const category = categoryEl ? categoryEl.value : '';
+  const keepForeverEl = document.getElementById('archiveKeepForever');
+  const keepForever = keepForeverEl ? keepForeverEl.checked === true : false;
   try {
     const res = await fetch('/api/archive/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cityId: activeCity.id, enabled, time, retentionDays }),
+      body: JSON.stringify({ cityId: activeCity.id, enabled, time, retentionDays, category, keepForever }),
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const body = await res.json();
@@ -136,6 +140,8 @@ function buildSnapshotFromLiveState() {
       : null,
     additionalMaxTempC: additionalModelMaxTempC,
     testMaxTempC: testModelMaxTempC,
+    category: (archiveSettingsByCity[activeCity.id] || {}).category || '',
+    keepForever: (archiveSettingsByCity[activeCity.id] || {}).keepForever === true,
   };
 }
 
@@ -288,10 +294,33 @@ async function deleteSnapshot(snapshotId) {
   }
 }
 
+async function updateArchiveSnapshot(snapshotId, patch) {
+  try {
+    const res = await fetch(`/api/archive/snapshots/${snapshotId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ snapshot: patch }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (archivePanelOpen) await renderArchivePanel();
+  } catch (error) {
+    console.warn('Update snapshot:', error.message);
+  }
+}
+
+function setArchiveCategory(snapshotId, category) {
+  updateArchiveSnapshot(snapshotId, { category });
+}
+
+function setArchiveKeep(snapshotId, keep) {
+  updateArchiveSnapshot(snapshotId, { keepForever: keep });
+}
+
 function archiveSummaryLine(s) {
   const modelCount = s.modelCount != null ? s.modelCount : 0;
   const models = modelCount ? ` · ${modelCount} models` : '';
-  return `${s.cityName} ${s.dateKey} ${formatArchiveTime(s.savedHourFrac)} · ${s.modelLabel || s.model}${models}`;
+  const tag = s.category ? ` [${s.category}]` : '';
+  return `${s.cityName} ${s.dateKey} ${formatArchiveTime(s.savedHourFrac)} · ${s.modelLabel || s.model}${models}${tag}`;
 }
 
 async function renderArchivePanel() {
@@ -311,15 +340,26 @@ async function renderArchivePanel() {
       listEl.innerHTML = '<div class="archive-empty">No saved snapshots yet</div>';
       return;
     }
-    listEl.innerHTML = snapshots.map((s) => `
+    listEl.innerHTML = snapshots.map((s) => {
+      const tagBadge = s.category
+        ? `<span class="archive-tag-badge ${s.category}">${s.category === 'green' ? '🟢' : '🔴'}</span>`
+        : '';
+      return `
       <div class="archive-row" data-id="${s.id}">
         <button class="archive-open" type="button" onclick="openSnapshot('${s.id}')">
-          <span class="archive-row-title">${archiveSummaryLine(s)}</span>
+          <span class="archive-row-title">${tagBadge}${archiveSummaryLine(s)}</span>
           <span class="archive-row-meta">${s.metarCount} obs · ${s.forecastCount} fc</span>
         </button>
+        <div class="archive-row-controls">
+          <button class="archive-tag ${s.category === 'green' ? 'active green' : ''}" type="button" title="Green category" onclick="setArchiveCategory('${s.id}','green')">🟢</button>
+          <button class="archive-tag ${s.category === 'red' ? 'active red' : ''}" type="button" title="Red category" onclick="setArchiveCategory('${s.id}','red')">🔴</button>
+          <button class="archive-tag clear" type="button" title="No category" onclick="setArchiveCategory('${s.id}','')">✕</button>
+          <label class="archive-keep" title="Keep forever"><input type="checkbox" ${s.keepForever ? 'checked' : ''} onchange="setArchiveKeep('${s.id}', this.checked)" /><span>keep</span></label>
+        </div>
         <button class="archive-delete" type="button" title="Delete" aria-label="Delete snapshot" onclick="deleteSnapshot('${s.id}')">×</button>
       </div>
-    `).join('');
+    `;
+    }).join('');
   } catch (error) {
     listEl.innerHTML = '<div class="archive-empty">Failed to load archive</div>';
   }
@@ -356,6 +396,8 @@ function renderArchiveSettingsControls() {
   const enabled = document.getElementById('archiveEnabled');
   const time = document.getElementById('archiveTime');
   const retention = document.getElementById('archiveRetentionDays');
+  const category = document.getElementById('archiveCategory');
+  const keep = document.getElementById('archiveKeepForever');
   if (!enabled || !time) return;
 
   const s = archiveSettingsByCity[activeCity.id] || {};
@@ -366,6 +408,8 @@ function renderArchiveSettingsControls() {
     retention.value = s.retentionDays != null ? s.retentionDays : '';
     retention.disabled = !s.enabled;
   }
+  if (category) category.value = s.category || '';
+  if (keep) keep.checked = s.keepForever === true;
 }
 
 function archiveEnabledToggled() {

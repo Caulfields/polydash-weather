@@ -121,6 +121,15 @@
                           <input type="number" min="0" id="archiveRetentionDays" aria-label="Retention days" disabled />
                           <span>days to keep</span>
                         </label>
+                        <select class="city-model-settings-select archive-time" id="archiveCategory" aria-label="Category">
+                          <option value="">-- category --</option>
+                          <option value="green">green 🟢</option>
+                          <option value="red">red 🔴</option>
+                        </select>
+                        <label class="archive-setting">
+                          <input type="checkbox" id="archiveKeepForever" />
+                          <span>keep forever</span>
+                        </label>
                         <button class="city-model-settings-save" type="button" onclick="saveCityModelSettings()">Save</button>
             <button class="city-model-settings-close" type="button" onclick="closeCityModelSettings()">✕</button>
           </div>
