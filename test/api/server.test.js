@@ -2,7 +2,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert');
 const http = require('http');
 const app = require('../../server');
-const { buildForecastPayload, metarPayload, dateKeyForTz } = require('../helpers/fixtures');
+const { buildForecastPayload, metarPayload } = require('../helpers/fixtures');
 const { jsonResponse, mockHttpsGet } = require('../helpers/mocks');
 
 let server;
@@ -138,72 +138,4 @@ test('GET /api/test-models returns config and POST updates it', async (t) => {
     additional: 'icon_seamless',
     test: '',
   });
-});
-
-test('GET /api/bot/weather returns v2.0 response', async (t) => {
-  mockUpstream(t);
-  const date = dateKeyForTz('Europe/London');
-  const res = await apiRequest(`/api/bot/weather?city=London&date=${date}`);
-  assert.strictEqual(res.status, 200);
-  const body = json(res);
-  assert.strictEqual(body.schema_version, '2.0');
-  assert.strictEqual(body.items[0].city.id, 'london');
-  assert.strictEqual(body.items[0].category, 1);
-});
-
-test('GET /api/bot/weather validates date and city', async (t) => {
-  mockUpstream(t);
-  assert.strictEqual((await apiRequest('/api/bot/weather?city=London')).status, 400);
-  assert.strictEqual((await apiRequest('/api/bot/weather?date=2026-08-20')).status, 400);
-});
-
-test('POST /api/bot/weather/batch builds items and errors', async (t) => {
-  mockUpstream(t);
-  const date = dateKeyForTz('Europe/London');
-  const res = await apiRequest('/api/bot/weather/batch', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: { date, cities: ['London', 'Atlantis'] },
-  });
-  assert.strictEqual(res.status, 200);
-  const body = json(res);
-  assert.strictEqual(body.items.length, 1);
-  assert.strictEqual(body.errors.length, 1);
-  assert.strictEqual(body.items[0].city.id, 'london');
-});
-
-test('GET /api/temperature requires API key and resolves city', async (t) => {
-  const previous = process.env.API_SECRET;
-  process.env.API_SECRET = 'route-secret';
-  t.after(() => {
-    if (previous === undefined) delete process.env.API_SECRET;
-    else process.env.API_SECRET = previous;
-  });
-  mockUpstream(t);
-
-  assert.strictEqual((await apiRequest('/api/temperature?city=London')).status, 401);
-  assert.strictEqual(
-    (await apiRequest('/api/temperature?city=London', { headers: { 'x-api-key': 'wrong' } })).status,
-    401,
-  );
-
-  const ok = await apiRequest('/api/temperature?city=London&unit=C', { headers: { 'x-api-key': 'route-secret' } });
-  assert.strictEqual(ok.status, 200);
-  const body = json(ok);
-  assert.strictEqual(body.city.id, 'london');
-  assert.ok(body.bestModel);
-  assert.strictEqual(body.unit, 'C');
-});
-
-test('GET /api/temperature rejects missing city', async (t) => {
-  const previous = process.env.API_SECRET;
-  process.env.API_SECRET = 'route-secret';
-  t.after(() => {
-    if (previous === undefined) delete process.env.API_SECRET;
-    else process.env.API_SECRET = previous;
-  });
-  mockUpstream(t);
-
-  const res = await apiRequest('/api/temperature', { headers: { 'x-api-key': 'route-secret' } });
-  assert.strictEqual(res.status, 400);
 });

@@ -135,6 +135,7 @@ function windTranscript({ speed, dirDeg, unit, variable } = {}) {
 }
 
 async function fetchOpenMeteo() {
+  if (inArchiveView()) return;
   const requestCityId = activeCity.id;
   const requestModel = activeForecastModel;
   const averaged = artificialAverageModel(requestModel);
@@ -282,6 +283,7 @@ function updateForecastMaxTemp() {
 }
 
 async function fetchAdditionalAndTestMaxTemp() {
+  if (inArchiveView()) return;
   const settings = cityModelSettings[activeCity.id];
   const additionalModelId = settings?.additional;
   const testModelId = settings?.test;
@@ -474,6 +476,7 @@ function updateModelTimeUI(run) {
 }
 
 async function fetchEcmwfTags() {
+  if (inArchiveView()) return;
   const tagWind = document.getElementById('tagWind');
   const tagRain = document.getElementById('tagRain');
   const tagCloud = document.getElementById('tagCloud');

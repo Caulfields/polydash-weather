@@ -8,3 +8,8 @@ services:
       - "3001:3000"
     environment:
       - NODE_ENV=production
+    volumes:
+      - archive-data:/app/data/archives
+
+volumes:
+  archive-data:

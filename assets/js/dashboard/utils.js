@@ -2,6 +2,14 @@ function activeTempUnit() {
   return activeCity.tempUnit === 'F' ? 'F' : 'C';
 }
 
+function inArchiveView() {
+  return !!window.__archiveView;
+}
+
+function archiveHourFrac() {
+  return window.__archiveView ? window.__archiveView.savedHourFrac : currentCityHourFrac();
+}
+
 function tempUnitLabel() {
   return `\u00B0${activeTempUnit()}`;
 }

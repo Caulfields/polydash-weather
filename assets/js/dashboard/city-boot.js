@@ -1,16 +1,12 @@
 const FAVORITE_CITIES_STORAGE_KEY = 'polydash.favoriteCityIds';
 const GREEN_CITIES_STORAGE_KEY = 'polydash.greenCityIds';
 const RED_CITIES_STORAGE_KEY = 'polydash.redCityIds';
-const CITY_NOTES_STORAGE_KEY = 'polydash.cityNotes';
-const CITY_NOTES_OPEN_STORAGE_KEY = 'polydash.cityNotesOpen';
 const SAVED_AVERAGE_MODELS_STORAGE_KEY = 'polydash.savedAverageModelsByCity';
 let citySearchQuery = '';
 let favoriteCityIds = loadStoredCityIdSet(FAVORITE_CITIES_STORAGE_KEY);
 let greenCityIds = loadStoredCityIdSet(GREEN_CITIES_STORAGE_KEY);
 let redCityIds = loadStoredCityIdSet(RED_CITIES_STORAGE_KEY);
-let cityNotesById = loadCityNotes();
 let savedAverageModelsByCity = loadSavedAverageModels();
-let locationNotesOpen = loadLocationNotesOpen();
 let cityFilterMode = 'all';
 let cityCategories = {};
 let citySortMode = null;
@@ -114,23 +110,6 @@ function renderCityListControls() {
   }).join('');
 }
 
-function loadCityNotes() {
-  try {
-    const raw = localStorage.getItem(CITY_NOTES_STORAGE_KEY);
-    const notes = JSON.parse(raw || '{}');
-    if (!notes || typeof notes !== 'object' || Array.isArray(notes)) return {};
-    return Object.fromEntries(
-      Object.entries(notes).filter(([id, value]) => CITIES[id] && typeof value === 'string')
-    );
-  } catch (error) {
-    return {};
-  }
-}
-
-function saveCityNotes() {
-  localStorage.setItem(CITY_NOTES_STORAGE_KEY, JSON.stringify(cityNotesById));
-}
-
 function savedAverageId(cityId, modelIds) {
   return `saved_avg_${cityId}_${modelIds.join('__')}`;
 }
@@ -223,14 +202,6 @@ function deleteSavedAverageModel(modelId) {
     fetchOpenMeteo().catch(console.error);
   }
   renderModelDock();
-}
-
-function loadLocationNotesOpen() {
-  return localStorage.getItem(CITY_NOTES_OPEN_STORAGE_KEY) !== 'false';
-}
-
-function saveLocationNotesOpen() {
-  localStorage.setItem(CITY_NOTES_OPEN_STORAGE_KEY, `${locationNotesOpen}`);
 }
 
 function loadCityModelSettings() {
@@ -337,6 +308,14 @@ function renderCityList() {
 }
 
 function cityModelOptions() {
+  if (inArchiveView()) {
+    const archived = Object.keys(archiveSnapshotModels || {});
+    const primary = activeForecastModel;
+    const ids = archived.filter((id) => id !== primary);
+    const list = [primary, ...ids].filter(Boolean);
+    if (!list.includes('auto')) list.push('auto');
+    return list;
+  }
   const settings = cityModelSettings[activeCity.id] || {};
   const pinned = [settings.basic, settings.additional, settings.test]
     .filter((id) => id && id !== 'none' && WEATHER_MODELS[id]);
@@ -370,11 +349,13 @@ function renderModelDock() {
   if (!dock) return;
   const options = cityModelOptions();
   if (!options.includes(activeForecastModel)) activeForecastModel = options[0] || 'auto';
+  const inArchive = inArchiveView();
   dock.innerHTML = options.map((id) => {
     const score = modelScoresById[id];
     const averaged = artificialAverageModel(id);
     const rankedClass = rankedCityId === activeCity.id && score ? ' ranked' : '';
     const savedClass = averaged?.saved ? ' saved' : '';
+    const isActive = id === activeForecastModel;
     const title = score
       ? `MAE ${score.mae.toFixed(1)}${tempUnitLabel()} / ${score.matches} matches`
       : averaged?.label || WEATHER_MODELS[id] || id;
@@ -384,11 +365,11 @@ function renderModelDock() {
       : '';
     return `
     <span class="model-chip${savedClass}">
-      <button class="model-button${id === activeForecastModel ? ' active' : ''}${rankedClass}${savedClass}" title="${title}" type="button" onclick="selectForecastModel('${id}')">
+      <button class="model-button${isActive ? ' active' : ''}${rankedClass}${savedClass}" title="${title}" type="button" onclick="selectForecastModel('${id}')">
         ${averaged?.label || WEATHER_MODELS[id] || id}
         ${scoreText}
       </button>
-      ${deleteButton}
+      ${inArchive ? '' : deleteButton}
     </span>
   `;
   }).join('');
@@ -430,7 +411,6 @@ function setCityChrome(options = {}) {
   });
   renderModelDock();
   renderForecastDayControls();
-  renderLocationNotes();
   renderCityListControls();
 
   const overlay = document.getElementById('tempChartOverlay');
@@ -517,42 +497,6 @@ async function fetchCityRankings() {
   }
 }
 
-function updateCityNote(cityId, value) {
-  if (!CITIES[cityId]) return;
-  const note = `${value || ''}`;
-  if (note.trim()) {
-    cityNotesById[cityId] = note;
-  } else {
-    delete cityNotesById[cityId];
-  }
-  saveCityNotes();
-}
-
-function updateActiveCityNote(value) {
-  updateCityNote(activeCity.id, value);
-}
-
-function renderLocationNotes() {
-  const notesPanel = document.getElementById('locationNotes');
-  const notesTitle = document.getElementById('locationNotesTitle');
-  const notesInput = document.getElementById('locationNotesInput');
-  const toggle = document.getElementById('locationNotesToggle');
-  const toggleText = document.getElementById('locationNotesToggleText');
-  if (!notesPanel || !notesTitle || !notesInput || !toggle || !toggleText) return;
-
-  notesTitle.textContent = `${activeCity.name} notes`;
-  notesInput.value = cityNotesById[activeCity.id] || '';
-  notesPanel.classList.toggle('collapsed', !locationNotesOpen);
-  toggle.setAttribute('aria-expanded', `${locationNotesOpen}`);
-  toggleText.textContent = locationNotesOpen ? 'Hide' : 'Open';
-}
-
-function toggleLocationNotes() {
-  locationNotesOpen = !locationNotesOpen;
-  saveLocationNotesOpen();
-  renderLocationNotes();
-}
-
 function openCityModelSettings() {
   const panel = document.getElementById('cityModelSettingsPanel');
   if (!panel) return;
@@ -587,6 +531,7 @@ function openCityModelSettings() {
   }).join('');
   
   panel.style.display = '';
+  renderArchiveSettingsControls();
 }
 
 function closeCityModelSettings() {
@@ -612,7 +557,8 @@ function saveCityModelSettings() {
   }
   
   saveCityModelSettingsToStorage();
-  
+  saveArchiveSettings();
+
   // Sync to server for bot API
   fetch('/api/test-models', {
     method: 'POST',
@@ -1242,6 +1188,26 @@ function selectForecastModel(modelId) {
   if (activeForecastModel === modelId) return;
   activeForecastModel = modelId;
   const averaged = artificialAverageModel(modelId);
+  if (inArchiveView()) {
+    let savedRows = archiveModelRows(modelId);
+    if (!savedRows || !savedRows.length) {
+      const arch = getArchiveView();
+      if (arch && arch.snapshot && (modelId === arch.snapshot.model || modelId === 'auto')) {
+        savedRows = arch.snapshot.forecastRows;
+      }
+    }
+    hourlyOmState = savedRows && savedRows.length
+      ? { dateKey: activeForecastDateKey(activeCity.timezone), rows: savedRows.map((row) => ({ ...row })), sourceLabel: 'Archive' }
+      : null;
+    omData = null;
+    renderModelDock();
+    drawChart();
+    updateForecastMaxTemp();
+    updateWeatherCodeUI();
+    updateTagsDOM(hourlyOmState ? hourlyOmState.rows : []);
+    document.getElementById('omLoading').style.display = 'none';
+    return;
+  }
   if (averaged?.rows?.length) {
     hourlyOmState = {
       dateKey: activeForecastDateKey(activeCity.timezone),
@@ -1254,8 +1220,6 @@ function selectForecastModel(modelId) {
     omData = null;
   }
   renderModelDock();
-  document.getElementById('omLoading').style.display = '';
-  document.getElementById('omLoading').textContent = 'Loading...';
   drawChart();
   if (averaged?.rows?.length) { updateForecastMaxTemp(); fetchAdditionalAndTestMaxTemp(); }
   if (averaged?.rows?.length) {
@@ -1306,6 +1270,10 @@ function toggleMetarRaw() {
 function switchCity(cityId) {
   if (!CITIES[cityId] || activeCity.id === cityId) return;
   clearWeatherTags();
+  if (inArchiveView()) {
+    setArchiveView(null);
+    updateArchiveBanner();
+  }
 
   activeCity = CITIES[cityId];
   resetModelRanking();

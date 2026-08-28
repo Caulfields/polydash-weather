@@ -230,6 +230,7 @@ function clearTemperatureHighlight() {
 }
 
 async function loadMetar() {
+  if (inArchiveView()) return;
   if (!isTodayForecastSelected()) return;
   const requestCityId = activeCity.id;
   const requestStation = activeCity.metar;
@@ -456,7 +457,7 @@ function drawChart() {
   ctx.clearRect(0, 0, width, height);
 
   const forecastRows = getForecastRows();
-  const nowHour = currentCityHourFrac();
+  const nowHour = archiveHourFrac();
   const observedToday = isTodayForecastSelected()
     ? metarToday.filter((item) => toHourFrac(item.time) <= nowHour + 0.25)
     : [];
@@ -571,7 +572,7 @@ function drawChart() {
     ctx.fillStyle = 'rgba(231,235,244,0.55)';
     ctx.font = '10px Inter,system-ui,sans-serif';
     ctx.textAlign = nowX > width - 52 ? 'right' : 'left';
-    ctx.fillText('now', nowX + (ctx.textAlign === 'left' ? 5 : -5), pad.top + 10);
+    ctx.fillText(inArchiveView() ? 'saved' : 'now', nowX + (ctx.textAlign === 'left' ? 5 : -5), pad.top + 10);
   }
 
   if (forecastRows.length) {

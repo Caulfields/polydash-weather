@@ -2,11 +2,8 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const forecastHandler = require('../../api/forecast');
 const metarHandler = require('../../api/metar');
-const temperatureHandler = require('../../api/temperature');
 const cityRankingHandler = require('../../api/city-ranking');
-const botWeatherHandler = require('../../api/bot/weather');
-const batchHandler = require('../../api/bot/weather/batch');
-const { buildForecastPayload, metarPayload, dateKeyForTz } = require('../helpers/fixtures');
+const { buildForecastPayload, metarPayload } = require('../helpers/fixtures');
 const { jsonResponse, makePlainRes, makePlainReq } = require('../helpers/mocks');
 
 function mockUpstream(t, { metar = true } = {}) {
@@ -130,59 +127,6 @@ test('metar handler rejects invalid station', async (t) => {
   assert.strictEqual(res.statusCode, 400);
 });
 
-test('temperature handler requires API key', async (t) => {
-  const previous = process.env.API_SECRET;
-  process.env.API_SECRET = 'test-secret';
-  t.after(() => {
-    if (previous === undefined) delete process.env.API_SECRET;
-    else process.env.API_SECRET = previous;
-  });
-  mockUpstream(t);
-
-  const noKey = makePlainRes();
-  await temperatureHandler(makePlainReq({ query: { city: 'London' } }), noKey);
-  assert.strictEqual(noKey.statusCode, 401);
-
-  const wrongKey = makePlainRes();
-  await temperatureHandler(makePlainReq({ query: { city: 'London' }, headers: { 'x-api-key': 'nope' } }), wrongKey);
-  assert.strictEqual(wrongKey.statusCode, 401);
-
-  const ok = makePlainRes();
-  await temperatureHandler(makePlainReq({ query: { city: 'London' }, headers: { 'x-api-key': 'test-secret' } }), ok);
-  assert.strictEqual(ok.statusCode, 200);
-  const body = parseBody(ok);
-  assert.strictEqual(body.city.id, 'london');
-  assert.ok(body.bestModel);
-});
-
-test('temperature handler supports Authorization Bearer', async (t) => {
-  const previous = process.env.API_SECRET;
-  process.env.API_SECRET = 'test-secret';
-  t.after(() => {
-    if (previous === undefined) delete process.env.API_SECRET;
-    else process.env.API_SECRET = previous;
-  });
-  mockUpstream(t);
-
-  const res = makePlainRes();
-  await temperatureHandler(makePlainReq({ query: { city: 'London' }, headers: { authorization: 'Bearer test-secret' } }), res);
-  assert.strictEqual(res.statusCode, 200);
-});
-
-test('temperature handler rejects missing city/station', async (t) => {
-  const previous = process.env.API_SECRET;
-  process.env.API_SECRET = 'test-secret';
-  t.after(() => {
-    if (previous === undefined) delete process.env.API_SECRET;
-    else process.env.API_SECRET = previous;
-  });
-  mockUpstream(t);
-
-  const res = makePlainRes();
-  await temperatureHandler(makePlainReq({ query: {}, headers: { 'x-api-key': 'test-secret' } }), res);
-  assert.strictEqual(res.statusCode, 400);
-});
-
 test('city-ranking handler returns categories for every city', async (t) => {
   mockUpstream(t);
   const res = makePlainRes();
@@ -194,54 +138,4 @@ test('city-ranking handler returns categories for every city', async (t) => {
     assert.ok(body[cityId], `missing ${cityId}`);
     assert.ok([1, 2, 3, 4].includes(body[cityId].category));
   }
-});
-
-test('bot/weather returns v2.0 response', async (t) => {
-  mockUpstream(t);
-  const date = dateKeyForTz('Europe/London');
-  const res = makePlainRes();
-  await botWeatherHandler(makePlainReq({ query: { city: 'London', date } }), res);
-  assert.strictEqual(res.statusCode, 200);
-  const body = parseBody(res);
-  assert.strictEqual(body.schema_version, '2.0');
-  assert.strictEqual(body.items.length, 1);
-  assert.strictEqual(body.items[0].city.id, 'london');
-  assert.strictEqual(body.items[0].category, 1);
-});
-
-test('bot/weather rejects missing date', async (t) => {
-  mockUpstream(t);
-  const res = makePlainRes();
-  await botWeatherHandler(makePlainReq({ query: { city: 'London' } }), res);
-  assert.strictEqual(res.statusCode, 400);
-});
-
-test('bot/weather rejects unknown city and station', async (t) => {
-  mockUpstream(t);
-  const res = makePlainRes();
-  await botWeatherHandler(makePlainReq({ query: { date: '2026-08-20' } }), res);
-  assert.strictEqual(res.statusCode, 400);
-});
-
-test('batch handler returns items and errors', async (t) => {
-  mockUpstream(t);
-  const date = dateKeyForTz('Europe/London');
-  const req = makePlainReq({
-    method: 'POST',
-    body: { date, cities: ['London', 'Atlantis'] },
-  });
-  const res = makePlainRes();
-  await batchHandler(req, res);
-  assert.strictEqual(res.statusCode, 200);
-  const body = parseBody(res);
-  assert.strictEqual(body.items.length, 1);
-  assert.strictEqual(body.errors.length, 1);
-  assert.strictEqual(body.items[0].city.id, 'london');
-});
-
-test('batch handler rejects requests without cities', async (t) => {
-  mockUpstream(t);
-  const res = makePlainRes();
-  await batchHandler(makePlainReq({ method: 'POST', body: { date: '2026-08-20' } }), res);
-  assert.strictEqual(res.statusCode, 400);
 });

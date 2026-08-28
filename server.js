@@ -1,15 +1,21 @@
-// Local development server. On Vercel, api/* serverless functions handle proxying.
+// Local development server. Runs the weather dashboard and archive scheduler.
 
 const express = require('express');
 const https = require('https');
 const path = require('path');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const { STATIONS, normalizeStation } = require('./data/weather-stations');
-const { resolveCity, rankTemperature } = require('./lib/weather-ranking');
-const { buildSingleWeatherResponse, buildBatchWeatherResponse } = require('./lib/bot-weather');
 const { cachedFetchForecast } = require('./lib/open-meteo');
 const { computeCityCategories } = require('./lib/city-ranking');
 const { TEST_MODELS, getTestModels, setTestModels } = require('./data/test-models');
+const { CITIES } = require('./assets/js/dashboard/config');
+const {
+  createArchiveStore,
+  buildSnapshotFromPayloads,
+  shouldRunScheduledSave,
+  cityTodayKey,
+  cityModelIds,
+} = require('./lib/archive');
 
 function getSystemProxy() {
   const env = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
@@ -32,7 +38,30 @@ if (proxyAgent) console.log('Proxy for Open-Meteo:', proxyUrl);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({ limit: '64kb' }));
+const archiveDir = process.env.ARCHIVE_DATA_DIR || path.join(__dirname, 'data', 'archives');
+const archiveStore = createArchiveStore(archiveDir);
+
+async function fetchAllModelPayloads(city, dateKey, primaryModel) {
+  const modelIds = cityModelIds(city);
+  const primary = primaryModel && primaryModel !== 'auto' ? primaryModel : null;
+  const targets = [...modelIds];
+  if (primary && !targets.includes(primary)) targets.push(primary);
+  if (!targets.includes('auto')) targets.push('auto');
+  const result = {};
+  const batchSize = 4;
+  for (let index = 0; index < targets.length; index += batchSize) {
+    const batch = targets.slice(index, index + batchSize);
+    const settled = await Promise.allSettled(
+      batch.map((id) => cachedFetchForecast(fetchJson, city.metar, id, dateKey))
+    );
+    settled.forEach((item, i) => {
+      if (item.status === 'fulfilled' && item.value && item.value.hourly) {
+        result[batch[i]] = item.value;
+      }
+    });
+  }
+  return result;
+}
 
 const METAR_TTL_MS = 30 * 60_000;
 const metarCache = new Map();
@@ -102,13 +131,12 @@ function normalizeDate(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '';
 }
 
-function hasValidApiKey(req) {
-  const secret = process.env.API_SECRET;
-  if (!secret) return false;
-  const headerKey = req.get('x-api-key');
-  const auth = req.get('authorization') || '';
-  const bearerKey = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  return headerKey === secret || bearerKey === secret;
+async function readJsonBody(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const raw = Buffer.concat(chunks).toString('utf8');
+  if (!raw.trim()) return {};
+  return JSON.parse(raw);
 }
 
 async function fetchMetarData(station, hours) {
@@ -187,60 +215,89 @@ app.get('/api/metar', async (req, res) => {
   }
 });
 
-app.get('/api/temperature', async (req, res) => {
+app.get('/api/archive/settings', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-
-  if (!process.env.API_SECRET) {
-    res.status(500).json({ error: 'API_SECRET is not configured' });
-    return;
-  }
-  if (!hasValidApiKey(req)) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return;
-  }
-
-  const city = resolveCity(req.query.city || req.query.station);
-  const unit = `${req.query.unit || ''}`.toUpperCase();
-  if (!city) {
-    res.status(400).json({
-      error: 'Unknown city or station',
-      hint: 'Use ?city=London, ?city=london, or ?station=EGLC',
-    });
-    return;
-  }
-  if (unit && !['C', 'F'].includes(unit)) {
-    res.status(400).json({ error: 'Invalid unit. Use C or F.' });
-    return;
-  }
-
   try {
-    res.json(await rankTemperature(city, { unit }));
+    res.json(await archiveStore.getSettings());
   } catch (error) {
-    res.status(502).json({ error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/bot/weather', async (req, res) => {
+app.post('/api/archive/settings', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-
   try {
-    res.json(await buildSingleWeatherResponse({
-      city: req.query.city,
-      station: req.query.station,
-      date: req.query.date,
-    }));
+    const body = await readJsonBody(req);
+    const settings = await archiveStore.setSettings(body.cityId, body);
+    res.json({ ok: true, settings });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-app.post('/api/bot/weather/batch', async (req, res) => {
+app.get('/api/archive/snapshots', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-
   try {
-    res.json(await buildBatchWeatherResponse(req.body || {}));
+    const cityId = `${req.query.city || ''}`;
+    const snapshots = await archiveStore.listSnapshots(cityId || null);
+    res.json({ snapshots });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/archive/snapshots/:id', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const snapshot = await archiveStore.getSnapshot(req.params.id);
+    if (!snapshot) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+    res.json({ snapshot });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/archive/snapshots', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const body = await readJsonBody(req);
+    const city = CITIES[body.cityId];
+    if (city) {
+      const dateKey = body.dateKey || cityTodayKey(city.timezone);
+      const model = body.model || 'auto';
+      try {
+        const modelsPayloads = await fetchAllModelPayloads(city, dateKey, model);
+        const parsed = buildSnapshotFromPayloads({
+          city,
+          dateKey,
+          model,
+          modelsPayloads,
+          now: new Date(body.savedAtMs || Date.now()),
+        });
+        body.models = parsed.models;
+        if (!body.forecastRows || !body.forecastRows.length) body.forecastRows = parsed.forecastRows;
+        body.dateKey = dateKey;
+      } catch (error) {
+        console.warn('[archive] expand models failed:', error.message);
+      }
+    }
+    const snapshot = await archiveStore.addSnapshot(body);
+    res.json({ ok: true, snapshot: archiveStore.summary(snapshot) });
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete('/api/archive/snapshots/:id', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    await archiveStore.deleteSnapshot(req.params.id);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -259,18 +316,73 @@ app.get('/api/test-models', (req, res) => {
   res.json(TEST_MODELS);
 });
 
-app.post('/api/test-models', (req, res) => {
-  setTestModels(req.body && req.body.cityId, req.body && req.body.models);
+app.post('/api/test-models', async (req, res) => {
+  const body = await readJsonBody(req);
+  setTestModels(body && body.cityId, body && body.models);
   res.setHeader('Cache-Control', 'no-store');
-  res.json({ ok: true, models: getTestModels(req.body && req.body.cityId) });
+  res.json({ ok: true, models: getTestModels(body && body.cityId) });
 });
 
 app.use(express.static(path.join(__dirname)));
+
+const SCHEDULE_INTERVAL_MS = 30_000;
+
+async function scheduledArchiveSave() {
+  try {
+    const settings = await archiveStore.getSettings();
+    const now = new Date();
+    for (const cityId of Object.keys(settings)) {
+      const cfg = settings[cityId];
+      const city = CITIES[cityId];
+      if (!city || !cfg || !cfg.enabled) continue;
+      if (!shouldRunScheduledSave(cfg, city.timezone, now)) continue;
+
+      const dateKey = cityTodayKey(city.timezone, now);
+      const model = 'auto';
+      try {
+        const metarPayload = await fetchMetarData(city.metar, 24);
+        const forecastPayload = await cachedFetchForecast(fetchJson, city.metar, model, dateKey);
+        const modelsPayloads = await fetchAllModelPayloads(city, dateKey, model);
+
+        let additionalPayload = null;
+        let testPayload = null;
+        const models = TEST_MODELS[cityId] || {};
+        if (models.additional && models.additional !== model) {
+          additionalPayload = await cachedFetchForecast(fetchJson, city.metar, models.additional, dateKey);
+        }
+        if (models.test && models.test !== model && models.test !== models.additional) {
+          testPayload = await cachedFetchForecast(fetchJson, city.metar, models.test, dateKey);
+        }
+
+        const snapshot = buildSnapshotFromPayloads({
+          city,
+          dateKey,
+          forecastDay: 'today',
+          model,
+          metarPayload,
+          forecastPayload,
+          additionalPayload,
+          testPayload,
+          modelsPayloads,
+          now,
+        });
+        await archiveStore.addSnapshot(snapshot);
+        console.log(`[archive] saved ${cityId} ${dateKey} ${snapshot.id}`);
+      } catch (error) {
+        console.warn(`[archive] ${cityId}:`, error.message);
+      }
+    }
+  } catch (error) {
+    console.warn('[archive] scheduled run failed:', error.message);
+  }
+}
 
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`Weather dashboard running at http://localhost:${PORT}`);
   });
+  scheduledArchiveSave();
+  setInterval(scheduledArchiveSave, SCHEDULE_INTERVAL_MS);
 }
 
 module.exports = app;

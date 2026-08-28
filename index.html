@@ -58,6 +58,7 @@
             <button class="forecast-day-btn" id="forecastDayTomorrow" type="button" aria-pressed="false" onclick="setForecastDay('tomorrow')">Tomorrow</button>
           </div>
           <button class="metar-toggle" id="metarToggle" type="button" onclick="toggleMetarRaw()" title="Toggle METAR">METAR</button>
+          <span class="archive-stamp" id="archiveStamp" style="display:none"></span>
           <span class="metar-raw" id="metarRaw">loading...</span>
           <button class="copy-temp-button" id="copyTempBtn" type="button" onclick="copyForecastMaxTemp()" title="Copy max temp">📋</button>
           <span class="forecast-max-temp" id="forecastMaxTemp"></span>
@@ -102,13 +103,25 @@
           <button class="rank-button daytime" id="modelRankDayBtn" type="button" onclick="rankForecastModelsFromEight()">Best model from 08</button>
           <button class="rank-button daytime combo" id="modelComboRankDayBtn" type="button" onclick="rankForecastModelAveragesFromEight()">Best average from 08</button>
           <button class="rank-button daytime combo gear" id="modelSettingsBtn" type="button" onclick="openCityModelSettings()" title="Model settings">⚙</button>
+          <button class="rank-button archive-save" id="manualSaveBtn" type="button" onclick="manualArchiveSave()" title="Save weather snapshot">💾 Save</button>
+          <button class="rank-button archive-open-panel" id="archivePanelBtn" type="button" onclick="toggleArchivePanel()" title="Open weather archive">🗂 Archive</button>
+          <span class="archive-status" id="archiveStatus"></span>
           <span class="rank-status" id="modelRankStatus"></span>
           <div class="city-model-settings" id="cityModelSettingsPanel" style="display:none">
             <span class="city-model-settings-title">Settings for <strong id="settingsCityName"></strong></span>
             <select class="city-model-settings-select" id="settingsBasicModel" aria-label="Basic model"></select>
             <select class="city-model-settings-select" id="settingsAdditionalModel" aria-label="Additional model"></select>
             <select class="city-model-settings-select" id="settingsTestModel" aria-label="Test model"></select>
-            <button class="city-model-settings-save" type="button" onclick="saveCityModelSettings()">Save</button>
+            <label class="archive-setting">
+              <input type="checkbox" id="archiveEnabled" onchange="archiveEnabledToggled()" />
+              <span>Save archive</span>
+            </label>
+            <input type="time" class="city-model-settings-select archive-time" id="archiveTime" aria-label="Archive time" />
+                        <label class="archive-setting">
+                          <input type="number" min="0" id="archiveRetentionDays" aria-label="Retention days" disabled />
+                          <span>days to keep</span>
+                        </label>
+                        <button class="city-model-settings-save" type="button" onclick="saveCityModelSettings()">Save</button>
             <button class="city-model-settings-close" type="button" onclick="closeCityModelSettings()">✕</button>
           </div>
         </div>
@@ -121,15 +134,16 @@
         <div class="model-dock" id="modelDock"></div>
 
       </div>
-
-      <div class="location-notes" id="locationNotes">
-        <button class="location-notes-toggle" id="locationNotesToggle" type="button" aria-expanded="true" onclick="toggleLocationNotes()">
-          <span id="locationNotesTitle">Location notes</span>
-          <span class="location-notes-toggle-text" id="locationNotesToggleText">Hide</span>
-        </button>
-        <div class="location-notes-body" id="locationNotesBody">
-          <textarea class="location-notes-input" id="locationNotesInput" rows="4" placeholder="Add notes for this location" oninput="updateActiveCityNote(this.value)"></textarea>
+      <div class="archive-panel" id="archivePanel" style="display:none">
+        <div class="archive-panel-header">
+          <span>Weather archive</span>
+          <button class="archive-panel-close" type="button" onclick="toggleArchivePanel(false)" title="Close">✕</button>
         </div>
+        <div class="archive-list" id="archiveList"></div>
+      </div>
+      <div class="archive-banner" id="archiveBanner" style="display:none">
+        <span id="archiveBannerLabel"></span>
+        <button class="archive-exit" type="button" onclick="exitArchiveView()">Exit archive</button>
       </div>
     </section>
 
@@ -160,5 +174,6 @@
   <script src="/assets/js/dashboard/metar-chart.js?v=wind-6"></script>
   <script src="/assets/js/dashboard/openmeteo.js"></script>
   <script src="/assets/js/dashboard/city-boot.js"></script>
+  <script src="/assets/js/dashboard/archive.js"></script>
 </body>
 </html>
