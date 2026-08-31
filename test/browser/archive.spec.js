@@ -77,7 +77,10 @@ async function setupRoutes(page) {
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, snapshot: { ...saved } }) });
         return;
       }
-      const summaries = archiveState.snapshots.map((s) => ({
+      const city = urlObj.searchParams.get('city');
+      const summaries = archiveState.snapshots
+        .filter((s) => !city || s.cityId === city)
+        .map((s) => ({
         id: s.id,
         cityId: s.cityId,
         cityName: s.cityName,

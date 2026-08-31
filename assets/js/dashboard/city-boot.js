@@ -1293,6 +1293,7 @@ function switchCity(cityId) {
   omData = null;
 
   setCityChrome();
+  if (archivePanelOpen) renderArchivePanel();
   drawChart();
   const requests = [fetchOpenMeteo(), fetchEcmwfTags()];
   if (isTodayForecastSelected()) requests.push(loadMetar());

@@ -332,12 +332,12 @@ async function renderArchivePanel() {
   const listEl = document.getElementById('archiveList');
   listEl.innerHTML = 'Loading...';
   try {
-    const res = await fetch('/api/archive/snapshots', { cache: 'no-store' });
+    const res = await fetch(`/api/archive/snapshots?city=${encodeURIComponent(activeCity.id)}`, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const body = await res.json();
     const snapshots = body.snapshots || [];
     if (!snapshots.length) {
-      listEl.innerHTML = '<div class="archive-empty">No saved snapshots yet</div>';
+      listEl.innerHTML = '<div class="archive-empty">No saved snapshots for this city yet</div>';
       return;
     }
     listEl.innerHTML = snapshots.map((s) => {
