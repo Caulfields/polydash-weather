@@ -49,9 +49,25 @@ time. Snapshots are never modified after saving.
 - Data persists to `data/archives/` on the VPS (a Docker volume survives redeploys).
 - Auto-save catches up if the configured time has already passed today.
 
+### WD1 automation (auto mirror of Weather Dashboard Archives)
+
+Cities flagged `auto: true` in their archive settings are not saved by the
+wall-clock scheduler: instead the app watches the Weather Dashboard
+(:3000) Archives, saves a snapshot when wd1 collects the first data of the
+market day, and tags each snapshot 🟢 green / 🔴 red by the market result in
+wd1's control slot. Full description for agents: **[WD1-AUTOMATION.md](WD1-AUTOMATION.md)**.
+
+## API endpoints (archive)
+
+| Endpoint | Description |
+|---|---|
+| `PATCH /api/archive/settings` | Partial update of one city's archive settings (does not reset omitted fields) |
+
 ## Environment variables
 
 - `ARCHIVE_DATA_DIR` — optional directory for archive data (default `data/archives`)
+- `WD1_AI_TOKEN` — Bearer token for the Weather Dashboard (:3000) read API (its `AI_TOKEN`); the wd1 automation is off when unset
+- `WD1_BASE_URL` — wd1 base URL (default `http://host.docker.internal:3000`)
 
 ## Deployment
 
