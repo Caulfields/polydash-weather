@@ -1,5 +1,3 @@
-// Local development server. Runs the weather dashboard and archive scheduler.
-
 const express = require('express');
 const https = require('https');
 const path = require('path');
@@ -16,6 +14,10 @@ const {
   cityTodayKey,
   cityModelIds,
 } = require('./lib/archive');
+const {
+  createWd1Automation,
+  ensureAutoSettings,
+} = require('./lib/wd1-automation');
 
 function getSystemProxy() {
   const env = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
@@ -61,6 +63,40 @@ async function fetchAllModelPayloads(city, dateKey, primaryModel) {
     });
   }
   return result;
+}
+
+// Build and persist a fresh forecast snapshot for a city (used by the legacy
+// wall-clock scheduler and by the wd1 automation alike).
+async function saveSnapshotForCity(city, dateKey, now = new Date()) {
+  const model = 'auto';
+  const metarPayload = await fetchMetarData(city.metar, 24);
+  const forecastPayload = await cachedFetchForecast(fetchJson, city.metar, model, dateKey);
+  const modelsPayloads = await fetchAllModelPayloads(city, dateKey, model);
+
+  let additionalPayload = null;
+  let testPayload = null;
+  const models = TEST_MODELS[city.id] || {};
+  if (models.additional && models.additional !== model) {
+    additionalPayload = await cachedFetchForecast(fetchJson, city.metar, models.additional, dateKey);
+  }
+  if (models.test && models.test !== model && models.test !== models.additional) {
+    testPayload = await cachedFetchForecast(fetchJson, city.metar, models.test, dateKey);
+  }
+
+  const snapshot = buildSnapshotFromPayloads({
+    city,
+    dateKey,
+    forecastDay: 'today',
+    model,
+    metarPayload,
+    forecastPayload,
+    additionalPayload,
+    testPayload,
+    modelsPayloads,
+    now,
+  });
+  await archiveStore.addSnapshot(snapshot);
+  return snapshot;
 }
 
 const METAR_TTL_MS = 30 * 60_000;
@@ -235,6 +271,18 @@ app.post('/api/archive/settings', async (req, res) => {
   }
 });
 
+// Partial per-city settings update (does not reset omitted fields).
+app.patch('/api/archive/settings', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const body = await readJsonBody(req);
+    const settings = await archiveStore.patchSettings(body.cityId, body);
+    res.json({ ok: true, settings });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 app.get('/api/archive/snapshots', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
@@ -349,39 +397,13 @@ async function scheduledArchiveSave() {
     for (const cityId of Object.keys(settings)) {
       const cfg = settings[cityId];
       const city = CITIES[cityId];
-      if (!city || !cfg || !cfg.enabled) continue;
+      // wd1-automated cities are saved by the wd1 loop, not by wall clock
+      if (!city || !cfg || !cfg.enabled || cfg.auto === true) continue;
       if (!shouldRunScheduledSave(cfg, city.timezone, now)) continue;
 
       const dateKey = cityTodayKey(city.timezone, now);
-      const model = 'auto';
       try {
-        const metarPayload = await fetchMetarData(city.metar, 24);
-        const forecastPayload = await cachedFetchForecast(fetchJson, city.metar, model, dateKey);
-        const modelsPayloads = await fetchAllModelPayloads(city, dateKey, model);
-
-        let additionalPayload = null;
-        let testPayload = null;
-        const models = TEST_MODELS[cityId] || {};
-        if (models.additional && models.additional !== model) {
-          additionalPayload = await cachedFetchForecast(fetchJson, city.metar, models.additional, dateKey);
-        }
-        if (models.test && models.test !== model && models.test !== models.additional) {
-          testPayload = await cachedFetchForecast(fetchJson, city.metar, models.test, dateKey);
-        }
-
-        const snapshot = buildSnapshotFromPayloads({
-          city,
-          dateKey,
-          forecastDay: 'today',
-          model,
-          metarPayload,
-          forecastPayload,
-          additionalPayload,
-          testPayload,
-          modelsPayloads,
-          now,
-        });
-        await archiveStore.addSnapshot(snapshot);
+        const snapshot = await saveSnapshotForCity(city, dateKey, now);
         console.log(`[archive] saved ${cityId} ${dateKey} ${snapshot.id}`);
       } catch (error) {
         console.warn(`[archive] ${cityId}:`, error.message);
@@ -392,12 +414,33 @@ async function scheduledArchiveSave() {
   }
 }
 
+// WD1 automation: mirrors the Weather Dashboard (:3000) Archives into this
+// app's archive and classifies city-days green/red by the market result.
+const wd1Automation = createWd1Automation({
+  archiveStore,
+  CITIES,
+  saveSnapshotForCity,
+});
+
+async function wd1AutomationCycle() {
+  try {
+    await wd1Automation.runOnce();
+  } catch (error) {
+    console.warn('[wd1] cycle failed:', error.message);
+  }
+}
+
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`Weather dashboard running at http://localhost:${PORT}`);
   });
+  ensureAutoSettings({ archiveStore, CITIES }).catch((error) => {
+    console.warn('[wd1] bootstrap failed:', error.message);
+  });
   scheduledArchiveSave();
   setInterval(scheduledArchiveSave, SCHEDULE_INTERVAL_MS);
+  wd1AutomationCycle();
+  setInterval(wd1AutomationCycle, SCHEDULE_INTERVAL_MS);
 }
 
 module.exports = app;
