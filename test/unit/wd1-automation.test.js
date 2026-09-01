@@ -298,10 +298,76 @@ test('runOnce: Igor examples — moscow red (0/0), telaviv green (100)', async (
   assert.strictEqual(result.saved.length, 2);
   const moscow = result.classified.find((c) => c.cityId === 'moscow');
   const telaviv = result.classified.find((c) => c.cityId === 'telaviv');
-  assert.deepStrictEqual(moscow, { cityId: 'moscow', dateKey: '2026-08-31', category: 'red', pair: [21, 22], rates: [0, 0] });
-  assert.deepStrictEqual(telaviv, { cityId: 'telaviv', dateKey: '2026-08-31', category: 'green', pair: [32, 33], rates: [100, 0] });
+  assert.strictEqual(moscow.category, 'red'); // all models 0/0
+  assert.strictEqual(moscow.attempts.length, 3); // basic, additional, avg
+  assert.strictEqual(telaviv.category, 'green'); // 100 on 32
   assert.strictEqual(store.snapshots.find((s) => s.cityId === 'moscow').category, 'red');
   assert.strictEqual(store.snapshots.find((s) => s.cityId === 'telaviv').category, 'green');
+});
+
+test('runOnce: green when ANY model hits, red only when all models miss', async () => {
+  const store = fakeStore();
+  await store.patchSettings('seoul', { auto: true });
+  await store.patchSettings('tokyo', { auto: true });
+
+  const now = new Date(u5moment(2026, 8, 31, 22, 30));
+  const row = (station, cityName, slots) => ({ station, cityName, slots });
+  // Seoul: basic misses (0/0) but test model hits (100) -> green.
+  // Tokyo: every model has rates but none >= 96 -> red.
+  const chunks = [
+    {
+      id: 'asia',
+      name: 'Asia',
+      cities: ['seoul', 'tokyo'],
+      schedule: ['08:30', '16:00'],
+      archives: [
+        {
+          id: 'a_init',
+          date: '31/08',
+          marketDate: '31/08',
+          slot: '08:30',
+          collectedAt: u5moment(2026, 8, 31, 8, 30),
+          results: [
+            row('RKSS', 'Seoul', [
+              mkSlot('basic', 'icon_seamless', 25.2, 10, {}),
+              mkSlot('additional', 'ecmwf_ifs025', 24.8, 10, {}),
+              mkSlot('test', 'cma_grapes_global', 26.3, 10, {}),
+            ]),
+            row('RJTT', 'Tokyo', [
+              mkSlot('basic', 'auto', 27.7, 10, {}),
+              mkSlot('additional', 'ecmwf_aifs025_single', 26.7, 10, {}),
+              mkSlot('test', 'gfs_seamless', 27.3, 10, {}),
+            ]),
+          ],
+        },
+        {
+          id: 'a_ctrl',
+          date: '31/08',
+          marketDate: '31/08',
+          slot: '16:00',
+          collectedAt: u5moment(2026, 8, 31, 16, 0),
+          results: [
+            row('RKSS', 'Seoul', [
+              mkSlot('basic', 'icon_seamless', 25.0, 10, { 25: 0, 26: 0 }),
+              mkSlot('additional', 'ecmwf_ifs025', 24.8, 10, { 24: 0, 25: 0 }),
+              mkSlot('test', 'cma_grapes_global', 26.3, 10, { 26: 99.95, 27: 0.05 }),
+            ]),
+            row('RJTT', 'Tokyo', [
+              mkSlot('basic', 'auto', 28.1, 10, { 27: 55, 28: 40 }),
+              mkSlot('additional', 'ecmwf_aifs025_single', 26.7, 10, { 26: 30, 27: 45 }),
+              mkSlot('test', 'gfs_seamless', 27.3, 10, { 27: 12, 28: 60 }),
+            ]),
+          ],
+        },
+      ],
+    },
+  ];
+  const result = await makeTestAutomation(store, chunks).runOnce(now);
+  const seoul = result.classified.find((c) => c.cityId === 'seoul');
+  const tokyo = result.classified.find((c) => c.cityId === 'tokyo');
+  assert.strictEqual(seoul.category, 'green'); // test model 26 -> 99.95
+  assert.strictEqual(seoul.attempts.find((a) => a.key === 'basic').category ?? 'attempt-ok', 'attempt-ok');
+  assert.strictEqual(tokyo.category, 'red'); // rates everywhere, no 96+
 });
 
 test('runOnce: saves on first collection and classifies green/red, no duplicates', async () => {
@@ -351,7 +417,6 @@ test('runOnce: saves on first collection and classifies green/red, no duplicates
   assert.strictEqual(result.saved.length, 3);
   const byCity = Object.fromEntries(result.classified.map((c) => [c.cityId, c]));
   assert.strictEqual(byCity.beijing.category, 'green'); // 29 -> 100
-  assert.deepStrictEqual(byCity.beijing.pair, [29, 30]);
   assert.strictEqual(byCity.paris.category, 'red'); // 23/24 -> 0/0
   assert.strictEqual(byCity.saopaulo.category, 'green'); // 96 counts as hit
   assert.strictEqual(store.snapshots.find((s) => s.cityId === 'beijing').category, 'green');
@@ -453,7 +518,7 @@ test('runOnce: control without rates for the pair stays unclassified', async () 
   assert.strictEqual(store.snapshots[0].category, '');
 });
 
-test('runOnce: control without avg slot (fewer than 2 models) stays unclassified', async () => {
+test('runOnce: control without any model slots stays unclassified', async () => {
   const store = fakeStore();
   await store.patchSettings('beijing', { auto: true });
   const automation = makeTestAutomation(store, [
@@ -464,7 +529,7 @@ test('runOnce: control without avg slot (fewer than 2 models) stays unclassified
       schedule: ['08:30', '16:00'],
       archives: [
         wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 8, 30), slot: '08:30', max: 27.4, low: 10 }),
-        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 16, 0), slot: '16:00', max: 27.9, low: 10, rates: { 27: 100 }, oneSlot: true }),
+        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 16, 0), slot: '16:00', max: 27.9, low: 10, rates: { 27: 100 }, noSlots: true }),
       ],
     },
   ]);

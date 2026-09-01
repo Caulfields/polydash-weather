@@ -54,32 +54,33 @@ archive: { date: "DD/MM",        // UTC+5 calendar date of collection
 
 ## Rules (owner-confirmed, 01.09.2026 — port of auto-table's day-detail highlight)
 
-The classifier is a verbatim port of auto-table's own green highlight
-(`detailRateHit` in `public/js/render.js` + `rateNumbers`/`buildAvgSlot` in
-`lib/shared/weather-utils.js`) — do NOT invent new rules:
+The classifier is auto-table's day-detail highlight (`detailRateHit` in
+`public/js/render.js` + `rateNumbers`/`buildAvgSlot` in
+`lib/shared/weather-utils.js`) applied to EVERY model slot — do NOT invent
+new rules:
 
-- **Avg slot**: in each archive the city's `basic`/`additional`/`test` slots
-  are averaged into an "avg" slot (mean `todayMax`, mean `todayLowCloudAvg`,
-  `ratesPct` merged per key; needs >= 2 base slots with data).
-- **Pair** = `rateNumbers(avg)`: `[roundHalfDown(todayMax), +1]`, null when
-  `todayLowCloudAvg >= 50` (no bets are placed) or data is missing.
+- **Model slots**: basic / additional / test / **avg** (mean of the base
+  slots with data — mean `todayMax`, mean `todayLowCloudAvg`, `ratesPct`
+  merged per key) / **kma** (Seoul's KMA model). A slot with data missing
+  (no `todayMax`, low clouds >= 50) is skipped.
+- **Pair** per slot = `rateNumbers(slot)`: `[roundHalfDown(todayMax), +1]`.
   Rounding per wd1 `RATES_RULES.txt`: 25.5 → 25, 29.8 → 30.
 - **Save**: when wd1 has ANY collection for the current market day of a chunk,
   every city with `settings.auto === true` gets one snapshot per city-day
   (`dateKey` = market day, dedup by `dateKey`).
-- **Classify** (once the control archive exists): `RATE_HIT_MIN = 96`.
-  - control avg `ratesPct` on ANY number of the initial pair `>= 96` →
-    `category: "green"` (совпало)
-  - otherwise, if the control has a rate for at least one pair number →
-    `category: "red"` (не совпало)
-  - no rates for the pair / no avg slot / pair missing → left `""` (not retried).
+- **Classify** (once the control archive exists), per model slot: the slot
+  HITS when the control collection's SAME slot has `ratesPct >= RATE_HIT_MIN
+  (96)` on ANY number of the slot's initial pair.
+  - ANY model slot hits → `category: "green"` (совпало) — Igor, 01.09.2026
+  - slots have rates for their pairs but none hits → `category: "red"`
+  - no slot has a pair or control rates → left `""` (not retried).
 - **Initial** = the day's FIRST collection (earliest `collectedAt`);
   **control** = the scheduled closer slot, else a late collection after the
   control moment minus grace.
 - Classification only touches snapshots whose `dateKey` is **today or
   yesterday** (city-local). Older unclassified snapshots are never rewritten.
-- Examples (Igor, 01.09): Moscow initial pair 21-22, control rates 0/0 → red.
-  Tel Aviv pair 32-33, control has 100 on 32 → green.
+- Examples (Igor, 01.09): Moscow 21-22 with control rates 0/0 → red;
+  Tel Aviv 32-33 with 100 on 32 → green.
 
 ## Runtime behaviour
 
