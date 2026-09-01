@@ -54,8 +54,9 @@ time. Snapshots are never modified after saving.
 Cities flagged `auto: true` in their archive settings are not saved by the
 wall-clock scheduler: instead the app watches the Weather Dashboard
 (:3000) Archives, saves a snapshot when wd1 collects the first data of the
-market day, and tags each snapshot 🟢 green / 🔴 red by comparing the day's
-initial and control temperature pairs (the basic/auto model). Full description
+market day, and tags each snapshot 🟢 green / 🔴 red with the same rule as
+auto-table's day detail: the initial avg-model pair is "hit" when the control
+collection's Rates% on any pair number is >= 96. Full description
 for agents: **[WD1-AUTOMATION.md](WD1-AUTOMATION.md)**.
 
 ## API endpoints (archive)

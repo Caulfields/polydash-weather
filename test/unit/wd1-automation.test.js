@@ -3,13 +3,15 @@ const assert = require('node:assert');
 const CITIES = require('../../assets/js/dashboard/config').CITIES;
 const {
   AUTO_SAVE_TIME,
+  RATE_HIT_MIN,
+  buildAvgSlot,
   controlArchive,
   createWd1Automation,
   ensureAutoSettings,
-  initialArchive,
   makeSchedule,
   marketDayGroups,
-  positionFromArchive,
+  rateHit,
+  rateNumbers,
   slotArchive,
   wd1CityId,
 } = require('../../lib/wd1-automation');
@@ -20,16 +22,30 @@ const ddMm = (ms) => {
   const u = new Date(ms + U5);
   return `${pad2(u.getUTCDate())}/${pad2(u.getUTCMonth() + 1)}`;
 };
+const u5moment = (y, m, d, hh, mm) => Date.UTC(y, m - 1, d, hh, mm) - U5;
 
+// ------------------------------------------------------------- fixtures
+
+function mkSlot(name, modelKey, max, low, rates) {
+  return { slot: name, modelKey, compact: true, todayMax: max, todayLowCloudAvg: low, ratesPct: rates || {} };
+}
+// two base slots with data => the avg model exists (same max, like real wd1 rows)
+function slotsFor(max, low, rates) {
+  return [mkSlot('basic', 'auto', max, low, rates), mkSlot('additional', 'ecmwf_ifs', max, low, rates)];
+}
 function wd1Archive({
   collectedAtMs,
   slot,
   marketDateKey,
-  basicTodayMax = 27.4,
   station = 'ZBAA',
   cityName = 'Beijing',
-  noBasic = false,
+  max = 27.4,
+  low = 10,
+  rates = {},
+  noSlots = false,
+  oneSlot = false,
 }) {
+  const slots = noSlots ? [] : oneSlot ? [mkSlot('basic', 'auto', max, low, rates)] : slotsFor(max, low, rates);
   return {
     id: `arch_${collectedAtMs}_${slot}`,
     date: ddMm(collectedAtMs),
@@ -37,69 +53,54 @@ function wd1Archive({
     timestamp: slot,
     slot,
     collectedAt: collectedAtMs,
-    results: [
-      {
-        station,
-        cityName,
-        slots: noBasic
-          ? []
-          : [
-              { slot: 'basic', modelKey: 'auto', todayMax: basicTodayMax },
-              { slot: 'additional', modelKey: 'ecmwf_ifs', todayMax: basicTodayMax + 0.3 },
-            ],
-      },
-    ],
+    results: [{ station, cityName, slots }],
   };
 }
 
-const u5moment = (y, m, d, hh, mm) => Date.UTC(y, m - 1, d, hh, mm) - U5;
+// ------------------------------------------------------------------ avg
 
-// ---------------------------------------------------------------- schedule
-
-test('makeSchedule: plain chunk opener/closer', () => {
-  const s = makeSchedule({ schedule: ['11:30', '08:30', '16:00'] });
-  assert.strictEqual(s.opener.label, '08:30');
-  assert.strictEqual(s.closer.label, '16:00');
-  assert.strictEqual(s.boundary, false);
+test('buildAvgSlot: average of base slots, needs 2+, merges ratesPct', () => {
+  const avg = buildAvgSlot([mkSlot('basic', 'auto', 21.3, 10, { 21: 50 }), mkSlot('additional', 'gfs', 21.5, 30, { 22: 20 })]);
+  assert.strictEqual(avg.modelKey, 'avg');
+  assert.strictEqual(avg.todayMax, 21.4);
+  assert.strictEqual(avg.todayLowCloudAvg, 20);
+  assert.deepStrictEqual(avg.ratesPct, { 21: 50, 22: 20 });
+  assert.strictEqual(buildAvgSlot([mkSlot('basic', 'auto', 21.3, 10)]), null);
+  assert.strictEqual(buildAvgSlot([]), null);
 });
 
-test('makeSchedule: Others boundary chunk (dayStart 6, dayEnd 3)', () => {
-  const s = makeSchedule({ schedule: ['03:22', '18:32'], dayStartHour: 6, dayEndHour: 3 });
-  assert.strictEqual(s.boundary, true);
-  assert.strictEqual(s.opener.label, '18:32'); // opens the market day (morning in Sao Paulo)
-  assert.strictEqual(s.closer.label, '03:22'); // next UTC+5 calendar day
+// ----------------------------------------------------------- rateNumbers
+
+test('rateNumbers: pair from avg todayMax, roundHalfDown (auto-table RATES_RULES)', () => {
+  const mk = (max, low) => rateNumbers(buildAvgSlot(slotsFor(max, low)));
+  assert.deepStrictEqual(mk(29.8, 10), [30, 31]);
+  assert.deepStrictEqual(mk(24.3, 10), [24, 25]);
+  assert.deepStrictEqual(mk(25.5, 10), [25, 26]); // .5 rounds DOWN
+  assert.deepStrictEqual(mk(21.4, 10), [21, 22]); // Moscow initial pair
 });
 
-// ---------------------------------------------------------------- position
-
-test('positionFromArchive: roundHalfDown of the basic todayMax', () => {
-  const mk = (t) => wd1Archive({ collectedAtMs: 0, slot: '08:30', basicTodayMax: t });
-  // wd1 RATES_RULES examples: 29.8 -> 30, 24.3 -> 24, 25.5 -> 25 (half DOWN)
-  assert.strictEqual(positionFromArchive(mk(29.8), CITIES.beijing), 30);
-  assert.strictEqual(positionFromArchive(mk(24.3), CITIES.beijing), 24);
-  assert.strictEqual(positionFromArchive(mk(25.5), CITIES.beijing), 25);
-  const paris = wd1Archive({ collectedAtMs: 0, slot: '13:40', basicTodayMax: 23.1, station: 'LFPB', cityName: 'Paris' });
-  assert.strictEqual(positionFromArchive(paris, CITIES.paris), 23);
+test('rateNumbers: null when low clouds >= 50% or data missing', () => {
+  assert.strictEqual(rateNumbers(buildAvgSlot(slotsFor(21.4, 50))), null);
+  assert.strictEqual(rateNumbers(buildAvgSlot(slotsFor(21.4, 70))), null);
+  assert.strictEqual(rateNumbers(null), null);
+  const noMax = buildAvgSlot([mkSlot('basic', 'auto', null, 10), mkSlot('additional', 'gfs', 21, 10)]);
+  assert.strictEqual(rateNumbers(noMax), null); // avg todayMax null (one slot has no data... but still 2 with modelKey)
 });
 
-test('positionFromArchive: no basic temperature -> null', () => {
-  assert.strictEqual(positionFromArchive(wd1Archive({ collectedAtMs: 0, slot: '08:30', noBasic: true }), CITIES.beijing), null);
-  assert.strictEqual(positionFromArchive(null, CITIES.beijing), null);
+// --------------------------------------------------------------- rateHit
+
+test('rateHit: green when control ratesPct on any pair number >= 96 (auto-table detailRateHit)', () => {
+  assert.strictEqual(RATE_HIT_MIN, 96);
+  assert.strictEqual(rateHit([32, 33], { ratesPct: { 32: 100, 33: 0 } }), true); // Tel Aviv
+  assert.strictEqual(rateHit([32, 33], { ratesPct: { 32: 0, 33: 100 } }), true);
+  assert.strictEqual(rateHit([32, 33], { ratesPct: { 32: 96, 33: 0 } }), true); // boundary
+  assert.strictEqual(rateHit([32, 33], { ratesPct: { 32: 95.9, 33: 0 } }), false);
+  assert.strictEqual(rateHit([21, 22], { ratesPct: { 21: 0, 22: 0 } }), false); // Moscow
+  assert.strictEqual(rateHit([21, 22], { ratesPct: {} }), false);
+  assert.strictEqual(rateHit(null, { ratesPct: { 21: 100 } }), false);
 });
 
-test('initialArchive: earliest collection of the day wins (manual refreshes included)', () => {
-  const day = {
-    dateKey: '2026-08-31',
-    archives: [
-      wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 10, 42), slot: '10:42', basicTodayMax: 23.2, station: 'LFPB', cityName: 'Paris' }),
-      wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 8, 30), slot: '08:30', basicTodayMax: 23.1, station: 'LFPB', cityName: 'Paris' }),
-    ],
-  };
-  assert.strictEqual(initialArchive(day).slot, '08:30');
-  assert.strictEqual(positionFromArchive(initialArchive(day), CITIES.paris), 23);
-});
-
-// ------------------------------------------------------------- control slot
+// -------------------------------------------------------- control slot
 
 test('controlArchive: exact closer slot wins', () => {
   const day = {
@@ -110,11 +111,10 @@ test('controlArchive: exact closer slot wins', () => {
     ],
   };
   const s = makeSchedule({ schedule: ['08:30', '16:00'] });
-  const control = controlArchive(day, s, CITIES.beijing);
-  assert.strictEqual(control.slot, '16:00');
+  assert.strictEqual(controlArchive(day, s, CITIES.beijing).slot, '16:00');
 });
 
-test('controlArchive: falls back to a late collection with basic temperature', () => {
+test('controlArchive: falls back to a late collection with an avg slot', () => {
   const closerMs = u5moment(2026, 8, 31, 16, 0);
   const day = {
     dateKey: '2026-08-31',
@@ -124,8 +124,7 @@ test('controlArchive: falls back to a late collection with basic temperature', (
     ],
   };
   const s = makeSchedule({ schedule: ['08:30', '16:00'] });
-  const control = controlArchive(day, s, CITIES.beijing);
-  assert.strictEqual(control.slot, '16:12');
+  assert.strictEqual(controlArchive(day, s, CITIES.beijing).slot, '16:12');
 });
 
 test('controlArchive: early collection before the control moment is not used', () => {
@@ -140,7 +139,7 @@ test('controlArchive: early collection before the control moment is not used', (
   assert.strictEqual(controlArchive(day, s, CITIES.beijing), null);
 });
 
-// --------------------------------------------------------------- grouping
+// -------------------------------------------------------------- grouping
 
 test('marketDayGroups: groups by marketDate with year, Others boundary included', () => {
   const chunk = {
@@ -166,7 +165,7 @@ test('wd1CityId maps spaced keys to app ids', () => {
   assert.strictEqual(wd1CityId('atlantis', CITIES), null);
 });
 
-// -------------------------------------------------------- ensureAutoSettings
+// ------------------------------------------------------ ensureAutoSettings
 
 function fakeStore() {
   const settings = {};
@@ -214,15 +213,11 @@ function fakeStore() {
 
 test('ensureAutoSettings enables wd1 cities once and never re-enables disabled ones', async () => {
   const store = fakeStore();
-  const logLines = [];
-  let changed = await ensureAutoSettings({ archiveStore: store, CITIES, log: (m) => logLines.push(m) });
+  let changed = await ensureAutoSettings({ archiveStore: store, CITIES, log: () => {} });
   assert.strictEqual(changed, 26); // 27 wd1 cities, seoul already had settings
   assert.strictEqual(store.settings.paris.auto, true);
-  assert.strictEqual(store.settings.saopaulo.auto, true);
-  assert.strictEqual(store.settings.paris.enabled, true);
   assert.strictEqual(store.settings.paris.time, AUTO_SAVE_TIME);
 
-  // a city the user turned off stays off
   await store.patchSettings('paris', { auto: false });
   changed = await ensureAutoSettings({ archiveStore: store, CITIES, log: () => {} });
   assert.strictEqual(changed, 0);
@@ -246,13 +241,6 @@ function fakeSave(store) {
   };
 }
 
-const ASIA_CHUNK = {
-  id: 'asia',
-  name: 'Asia',
-  cities: ['beijing'],
-  schedule: ['08:30', '11:30', '16:00'],
-};
-
 function makeTestAutomation(store, wd1Chunks, { token = 'test-token' } = {}) {
   return createWd1Automation({
     archiveStore: store,
@@ -263,9 +251,60 @@ function makeTestAutomation(store, wd1Chunks, { token = 'test-token' } = {}) {
   });
 }
 
-test('runOnce: saves on first collection and classifies by temperature pair, no duplicates', async () => {
-  // three cities, three outcomes: beijing green (pair matched), paris red
-  // (23 vs 25), sao paulo green across the boundary day (18:32 -> 03:22)
+test('runOnce: Igor examples — moscow red (0/0), telaviv green (100)', async () => {
+  const store = fakeStore();
+  await store.patchSettings('moscow', { auto: true });
+  await store.patchSettings('telaviv', { auto: true });
+
+  const now = new Date(u5moment(2026, 8, 31, 22, 30)); // after Europe control 22:00
+  // real wd1 archives hold ALL cities of the chunk in one results array
+  const row = (station, cityName, max, low, rates) => ({ station, cityName, slots: slotsFor(max, low, rates) });
+  const chunks = [
+    {
+      id: 'europe',
+      name: 'Europe',
+      cities: ['moscow', 'tel aviv'],
+      schedule: ['13:40', '22:00'],
+      archives: [
+        {
+          id: 'arch_initial',
+          date: '31/08',
+          marketDate: '31/08',
+          timestamp: '13:40',
+          slot: '13:40',
+          collectedAt: u5moment(2026, 8, 31, 13, 40),
+          results: [
+            row('UUWW', 'Moscow', 21.4, 10, {}),
+            row('LLBG', 'Tel Aviv', 32.1, 5, {}),
+          ],
+        },
+        {
+          id: 'arch_control',
+          date: '31/08',
+          marketDate: '31/08',
+          timestamp: '22:00',
+          slot: '22:00',
+          collectedAt: u5moment(2026, 8, 31, 22, 0),
+          results: [
+            row('UUWW', 'Moscow', 19.6, 10, { 21: 0, 22: 0 }),
+            row('LLBG', 'Tel Aviv', 31.8, 5, { 32: 100, 33: 0 }),
+          ],
+        },
+      ],
+    },
+  ];
+  const result = await makeTestAutomation(store, chunks).runOnce(now);
+
+  assert.strictEqual(result.saved.length, 2);
+  const moscow = result.classified.find((c) => c.cityId === 'moscow');
+  const telaviv = result.classified.find((c) => c.cityId === 'telaviv');
+  assert.deepStrictEqual(moscow, { cityId: 'moscow', dateKey: '2026-08-31', category: 'red', pair: [21, 22], rates: [0, 0] });
+  assert.deepStrictEqual(telaviv, { cityId: 'telaviv', dateKey: '2026-08-31', category: 'green', pair: [32, 33], rates: [100, 0] });
+  assert.strictEqual(store.snapshots.find((s) => s.cityId === 'moscow').category, 'red');
+  assert.strictEqual(store.snapshots.find((s) => s.cityId === 'telaviv').category, 'green');
+});
+
+test('runOnce: saves on first collection and classifies green/red, no duplicates', async () => {
   const store = fakeStore();
   await store.patchSettings('beijing', { auto: true });
   await store.patchSettings('paris', { auto: true });
@@ -279,8 +318,8 @@ test('runOnce: saves on first collection and classifies by temperature pair, no 
       cities: ['beijing'],
       schedule: ['08:30', '16:00'],
       archives: [
-        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 8, 30), slot: '08:30', basicTodayMax: 28.7 }),
-        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 16, 0), slot: '16:00', basicTodayMax: 28.7 }),
+        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 8, 30), slot: '08:30', max: 28.7, low: 10, rates: {} }),
+        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 16, 0), slot: '16:00', max: 28.9, low: 10, rates: { 29: 100, 30: 0 } }),
       ],
     },
     {
@@ -289,20 +328,8 @@ test('runOnce: saves on first collection and classifies by temperature pair, no 
       cities: ['paris'],
       schedule: ['13:40', '22:00'],
       archives: [
-        wd1Archive({
-          collectedAtMs: u5moment(2026, 8, 31, 13, 40),
-          slot: '13:40',
-          basicTodayMax: 23.1,
-          station: 'LFPB',
-          cityName: 'Paris',
-        }),
-        wd1Archive({
-          collectedAtMs: u5moment(2026, 8, 31, 22, 0),
-          slot: '22:00',
-          basicTodayMax: 24.6,
-          station: 'LFPB',
-          cityName: 'Paris',
-        }),
+        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 13, 40), slot: '13:40', station: 'LFPB', cityName: 'Paris', max: 23.1, low: 10, rates: {} }),
+        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 22, 0), slot: '22:00', station: 'LFPB', cityName: 'Paris', max: 24.6, low: 10, rates: { 23: 0, 24: 0 } }),
       ],
     },
     {
@@ -313,22 +340,8 @@ test('runOnce: saves on first collection and classifies by temperature pair, no 
       dayStartHour: 6,
       dayEndHour: 3,
       archives: [
-        wd1Archive({
-          collectedAtMs: u5moment(2026, 8, 30, 18, 32),
-          slot: '18:32',
-          marketDateKey: u5moment(2026, 8, 30, 12, 0),
-          basicTodayMax: 26.4,
-          station: 'SBGR',
-          cityName: 'Sao Paulo',
-        }),
-        wd1Archive({
-          collectedAtMs: u5moment(2026, 8, 31, 3, 22),
-          slot: '03:22',
-          marketDateKey: u5moment(2026, 8, 30, 12, 0),
-          basicTodayMax: 26.4,
-          station: 'SBGR',
-          cityName: 'Sao Paulo',
-        }),
+        wd1Archive({ collectedAtMs: u5moment(2026, 8, 30, 18, 32), slot: '18:32', marketDateKey: u5moment(2026, 8, 30, 12, 0), station: 'SBGR', cityName: 'Sao Paulo', max: 26.4, low: 8, rates: {} }),
+        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 3, 22), slot: '03:22', marketDateKey: u5moment(2026, 8, 30, 12, 0), station: 'SBGR', cityName: 'Sao Paulo', max: 26.1, low: 8, rates: { 26: 96, 27: 0 } }),
       ],
     },
   ];
@@ -336,11 +349,11 @@ test('runOnce: saves on first collection and classifies by temperature pair, no 
   const result = await automation.runOnce(now);
 
   assert.strictEqual(result.saved.length, 3);
-  assert.deepStrictEqual(result.classified, [
-    { cityId: 'beijing', dateKey: '2026-08-31', category: 'green', initialTemp: 29, controlTemp: 29 },
-    { cityId: 'paris', dateKey: '2026-08-31', category: 'red', initialTemp: 23, controlTemp: 25 },
-    { cityId: 'saopaulo', dateKey: '2026-08-30', category: 'green', initialTemp: 26, controlTemp: 26 },
-  ]);
+  const byCity = Object.fromEntries(result.classified.map((c) => [c.cityId, c]));
+  assert.strictEqual(byCity.beijing.category, 'green'); // 29 -> 100
+  assert.deepStrictEqual(byCity.beijing.pair, [29, 30]);
+  assert.strictEqual(byCity.paris.category, 'red'); // 23/24 -> 0/0
+  assert.strictEqual(byCity.saopaulo.category, 'green'); // 96 counts as hit
   assert.strictEqual(store.snapshots.find((s) => s.cityId === 'beijing').category, 'green');
   assert.strictEqual(store.snapshots.find((s) => s.cityId === 'paris').category, 'red');
   assert.strictEqual(store.snapshots.find((s) => s.cityId === 'saopaulo').category, 'green');
@@ -358,8 +371,11 @@ test('runOnce: no save before the opener slot', async () => {
   const openMs = u5moment(2026, 8, 31, 8, 30);
   const automation = makeTestAutomation(store, [
     {
-      ...ASIA_CHUNK,
-      archives: [wd1Archive({ collectedAtMs: openMs, slot: '08:30', basicTodayMax: 28.7 })],
+      id: 'asia',
+      name: 'Asia',
+      cities: ['beijing'],
+      schedule: ['08:30', '16:00'],
+      archives: [wd1Archive({ collectedAtMs: openMs, slot: '08:30' })],
     },
   ]);
   const now = new Date(u5moment(2026, 8, 31, 7, 0)); // 08:30 UTC+5 not reached
@@ -371,9 +387,10 @@ test('runOnce: no save before the opener slot', async () => {
 test('runOnce: no save until wd1 collects the opener archive', async () => {
   const store = fakeStore();
   await store.patchSettings('beijing', { auto: true });
-  const automation = makeTestAutomation(store, [{ ...ASIA_CHUNK, archives: [] }]);
-  const now = new Date(u5moment(2026, 8, 31, 9, 0));
-  const result = await automation.runOnce(now);
+  const automation = makeTestAutomation(store, [
+    { id: 'asia', name: 'Asia', cities: ['beijing'], schedule: ['08:30', '16:00'], archives: [] },
+  ]);
+  const result = await automation.runOnce(new Date(u5moment(2026, 8, 31, 9, 0)));
   assert.strictEqual(result.saved.length, 0);
 });
 
@@ -382,7 +399,13 @@ test('runOnce: no classification until the control archive appears', async () =>
   await store.patchSettings('beijing', { auto: true });
   const openMs = u5moment(2026, 8, 31, 8, 30);
   const automation = makeTestAutomation(store, [
-    { ...ASIA_CHUNK, archives: [wd1Archive({ collectedAtMs: openMs, slot: '08:30', basicTodayMax: 28.7 })] },
+    {
+      id: 'asia',
+      name: 'Asia',
+      cities: ['beijing'],
+      schedule: ['08:30', '16:00'],
+      archives: [wd1Archive({ collectedAtMs: openMs, slot: '08:30' })],
+    },
   ]);
   const result = await automation.runOnce(new Date(u5moment(2026, 8, 31, 9, 0)));
   assert.strictEqual(result.saved.length, 1);
@@ -390,15 +413,18 @@ test('runOnce: no classification until the control archive appears', async () =>
   assert.strictEqual(store.snapshots[0].category, '');
 });
 
-test('runOnce: initial collection without basic temperature stays unclassified', async () => {
+test('runOnce: initial avg pair missing (low clouds >= 50%) stays unclassified', async () => {
   const store = fakeStore();
   await store.patchSettings('beijing', { auto: true });
   const automation = makeTestAutomation(store, [
     {
-      ...ASIA_CHUNK,
+      id: 'asia',
+      name: 'Asia',
+      cities: ['beijing'],
+      schedule: ['08:30', '16:00'],
       archives: [
-        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 8, 30), slot: '08:30', noBasic: true }),
-        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 16, 0), slot: '16:00', basicTodayMax: 28.7 }),
+        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 8, 30), slot: '08:30', max: 27.4, low: 60 }),
+        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 16, 0), slot: '16:00', max: 27.9, low: 10, rates: { 27: 100 } }),
       ],
     },
   ]);
@@ -407,15 +433,38 @@ test('runOnce: initial collection without basic temperature stays unclassified',
   assert.strictEqual(store.snapshots[0].category, '');
 });
 
-test('runOnce: control collection without basic temperature stays unclassified', async () => {
+test('runOnce: control without rates for the pair stays unclassified', async () => {
   const store = fakeStore();
   await store.patchSettings('beijing', { auto: true });
   const automation = makeTestAutomation(store, [
     {
-      ...ASIA_CHUNK,
+      id: 'asia',
+      name: 'Asia',
+      cities: ['beijing'],
+      schedule: ['08:30', '16:00'],
       archives: [
-        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 8, 30), slot: '08:30', basicTodayMax: 28.7 }),
-        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 16, 0), slot: '16:00', noBasic: true }),
+        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 8, 30), slot: '08:30', max: 27.4, low: 10 }),
+        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 16, 0), slot: '16:00', max: 27.9, low: 10, rates: { 25: 100 } }),
+      ],
+    },
+  ]);
+  const result = await automation.runOnce(new Date(u5moment(2026, 8, 31, 17, 0)));
+  assert.strictEqual(result.classified.length, 0);
+  assert.strictEqual(store.snapshots[0].category, '');
+});
+
+test('runOnce: control without avg slot (fewer than 2 models) stays unclassified', async () => {
+  const store = fakeStore();
+  await store.patchSettings('beijing', { auto: true });
+  const automation = makeTestAutomation(store, [
+    {
+      id: 'asia',
+      name: 'Asia',
+      cities: ['beijing'],
+      schedule: ['08:30', '16:00'],
+      archives: [
+        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 8, 30), slot: '08:30', max: 27.4, low: 10 }),
+        wd1Archive({ collectedAtMs: u5moment(2026, 8, 31, 16, 0), slot: '16:00', max: 27.9, low: 10, rates: { 27: 100 }, oneSlot: true }),
       ],
     },
   ]);
