@@ -13,7 +13,8 @@ Written for AI agents working on this repo. Read this before touching
 The automation makes wd2 **mirror wd1's Archives**: when wd1 collects the first
 data of a city's market day, wd2 saves its own forecast snapshot for that
 city-day; when wd1 collects the day's **control slot**, wd2 classifies the
-snapshot **green** (forecast matched the market result) or **red** (it didn't).
+snapshot **green** (the predicted temperature pair matched) or **red** (it
+didn't).
 
 ## wd1 data model (what the automation consumes)
 
@@ -36,9 +37,10 @@ archive: { date: "DD/MM",        // UTC+5 calendar date of collection
                                    ratesPct: { "27": 49.5, ... } } ] } ] }
 ```
 
-- `ratesPct` maps temperature threshold → Polymarket YES rate (%).
-  In the **control slot** these rates are post-market: `~100` = market resolved
-  YES on that threshold, `~0` = temperature landed below the lowest threshold.
+- `ratesPct` maps temperature threshold → Polymarket YES rate (%). The
+  thresholds are a pair of consecutive integers starting at
+  `roundHalfDown(todayMax)` of the `basic`/`auto` slot (wd1's
+  `RATES_RULES.txt`: 25.5 → 25, 29.8 → 30, 24.3 → 24).
 - **Control slot** = the LAST scheduled slot of the chunk's day
   (Asia 16:00, Europe 22:00, Others 03:22 UTC+5 — read from `schedule`, never hardcode).
 - **Boundary chunk** (Others: `dayStart 6`, `dayEnd 3`): the market day OPENS
@@ -47,28 +49,27 @@ archive: { date: "DD/MM",        // UTC+5 calendar date of collection
   `marketDate` handles this; no date arithmetic is needed — for all current
   chunks the city-local date at slot times equals the market date.
 - **Manual refreshes** in wd1 are stamped with their own time (`10:42`) instead
-  of the scheduled slot and often carry no `ratesPct`. Therefore:
-  never match by slot label, order by `collectedAt`, and fall through the
-  day's archives until one has rates.
+  of the scheduled slot. Therefore: never match by slot label, order by
+  `collectedAt`.
 
-## Rules (owner-confirmed, 31.08.2026)
+## Rules (owner-confirmed, 01.09.2026)
 
-- **Position** (what was predicted): from the day's initial snapshot — the
-  `basic`/`auto` slot's `ratesPct` argmax (`{ threshold, rate }`), valid only
-  if the max rate is above `POSITION_MIN_RATE = 10`. The control archive is
-  excluded from the search.
+The classifier compares **temperature pairs**, not Polymarket rates:
+
+- **Position** (what was predicted): the `basic`/`auto` slot's `todayMax` of
+  the day's FIRST collection, rounded half-down → an integer temperature
+  (e.g. 23.1 → "23, 24").
 - **Save**: when wd1 has ANY collection for the current market day of a chunk,
   every city with `settings.auto === true` gets one snapshot per city-day
   (`dateKey` = market day, dedup by `dateKey`).
-- **Classify** (once the control archive exists): look up the rate for the
-  position threshold in the control archive's `basic`/`auto` `ratesPct`:
-  - `rate >= GREEN_MIN_RATE (95)` → `category: "green"` (совпало)
-  - `rate <= RED_MAX_RATE (5)`    → `category: "red"` (не совпало)
-  - in between → left `""` (edge case, not retried until process restart)
+- **Classify** (once the control archive exists): round the `basic`/`auto`
+  `todayMax` of the control collection the same way and compare:
+  - equal to the initial pair → `category: "green"` (предсказатель совпал)
+  - different → `category: "red"`
+  - missing basic temperature in the initial or control collection → the
+    snapshot stays `""` and is not retried (in-memory guard set).
 - Classification only touches snapshots whose `dateKey` is **today or
   yesterday** (city-local). Older unclassified snapshots are never rewritten.
-- No position (>10% nowhere) or no rate for the threshold → snapshot stays
-  `""` and is not retried (in-memory guard set).
 
 ## Runtime behaviour
 
@@ -106,9 +107,9 @@ archive: { date: "DD/MM",        // UTC+5 calendar date of collection
 | `lib/wd1-automation.js` | All automation logic, pure + injectable (`wd1Fetch`, `log`), unit-tested |
 | `server.js` | Wiring: `saveSnapshotForCity`, both schedulers, `PATCH /api/archive/settings` |
 | `lib/archive.js` | Snapshot store: `patchSettings`, `auto` flag, mtime-cached `listSnapshots` |
-| `test/unit/wd1-automation.test.js` | 18 tests: schedule/position/control/grouping/runOnce flows |
+| `test/unit/wd1-automation.test.js` | 19 tests: schedule/position/control/grouping/runOnce flows |
 
-Constants to know: `POSITION_MIN_RATE = 10`, `GREEN_MIN_RATE = 95`,
-`RED_MAX_RATE = 5`, `CHUNKS_CACHE_MS = 5 min`, `CONTROL_FALLBACK_GRACE_MS = 15 min`
-(an archive collected at/after control-moment-minus-grace with rates counts as
-control if the scheduled closer slot was not collected).
+Constants to know: `CHUNKS_CACHE_MS = 5 min`, `CONTROL_FALLBACK_GRACE_MS = 15
+min` (an archive collected at/after control-moment-minus-grace with a basic
+temperature counts as control if the scheduled closer slot was not collected),
+`SKEW_TOLERANCE_MS = 15 min`.
